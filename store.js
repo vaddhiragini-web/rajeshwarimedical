@@ -26,31 +26,28 @@ const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=400&auto=format&fit=crop";
 
 // ============================================================================
-// Firebase (customer identity is kept locally; Firestore is used only to
-// write/read orders, matching the "orders" collection the admin console
-// already reads from).
+// IMPORTANT FIX
+// ----------------------------------------------------------------------------
+// Previously, Firebase/Supabase were set up with top-level `import` statements
+// and a top-level `supabase.createClient(...)` call. If the Firebase CDN
+// script failed to load (slow network, ad-blocker, offline testing, a typo in
+// the URL, etc.), the *entire* module would fail to execute — which meant
+// none of the event listeners below (including the login form's submit
+// handler) were ever attached. The visible symptom of that is exactly what
+// was reported: you fill in the login form, hit "Start Shopping", and
+// nothing happens / the page just reloads — the store never opens.
+//
+// The fix: the login screen, session handling, and cart are now fully local
+// (localStorage-based) and are wired up FIRST, synchronously, with zero
+// dependency on Firebase or Supabase. Firebase/Supabase are then initialised
+// separately, inside try/catch, using a dynamic import() for Firebase. If
+// that initialisation fails, the store still opens — you just see a small
+// banner explaining that product loading / orders aren't available yet,
+// instead of being stuck on the login screen.
 // ============================================================================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  onSnapshot,
-  query,
-  where,
-  orderBy,
-  serverTimestamp,
-} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
-
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
-
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ============================================================================
 // Local "customer session" — name + phone, stored on this device.
-// (Swap this for real Firebase phone auth if you want OTP verification here
-// too; the admin console already shows that pattern.)
 // ============================================================================
 const SESSION_KEY = "rmg_customer_session";
 const CART_KEY = "rmg_cart";
@@ -89,6 +86,8 @@ const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
 const adminLoginLink = document.getElementById("admin-login-link");
 
+const backendWarning = document.getElementById("backend-warning");
+
 const userChip = document.getElementById("user-chip");
 const logoutBtn = document.getElementById("logout-btn");
 
@@ -113,8 +112,21 @@ const ordersBody = document.getElementById("orders-body");
 
 let allProducts = [];
 
+// Backend handles — filled in by initBackend() if it succeeds. Every
+// function that uses them checks for null first, so a failed/slow backend
+// never blocks login, browsing the (empty) grid, or the cart drawer.
+let db = null;
+let supabaseClient = null;
+let firebaseFns = null; // { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp }
+
+function showBackendWarning(message) {
+  if (!backendWarning) return;
+  backendWarning.textContent = message;
+  backendWarning.hidden = false;
+}
+
 // ============================================================================
-// Boot
+// Boot — login/shop toggle + cart wiring first, no backend dependency.
 // ============================================================================
 adminLoginLink.addEventListener("click", () => {
   window.location.href = ADMIN_LOGIN_URL;
@@ -125,6 +137,7 @@ if (existingSession) {
   enterShop(existingSession);
 } else {
   loginScreen.hidden = false;
+  shopScreen.hidden = true;
 }
 
 loginForm.addEventListener("submit", (e) => {
@@ -133,6 +146,12 @@ loginForm.addEventListener("submit", (e) => {
 
   const name = document.getElementById("c-name").value.trim();
   const phoneDigits = document.getElementById("c-phone").value.trim();
+
+  if (!name) {
+    loginError.textContent = "Please enter your name.";
+    loginError.hidden = false;
+    return;
+  }
 
   if (!/^[0-9]{10}$/.test(phoneDigits)) {
     loginError.textContent = "Enter a valid 10-digit mobile number.";
@@ -149,8 +168,8 @@ function enterShop(session) {
   loginScreen.hidden = true;
   shopScreen.hidden = false;
   userChip.textContent = session.name || session.phone;
-  loadProducts();
   renderCartFromStorage();
+  loadProducts(); // safe no-op / friendly error if backend isn't ready
 }
 
 logoutBtn.addEventListener("click", () => {
@@ -161,11 +180,73 @@ logoutBtn.addEventListener("click", () => {
 });
 
 // ============================================================================
+// Backend init (Firebase + Supabase) — isolated so a failure here can never
+// stop the store screen from opening.
+// ============================================================================
+async function initBackend() {
+  // Supabase client (loaded as a classic <script> before this module, so
+  // window.supabase should already exist — but guard it anyway).
+  try {
+    if (!window.supabase) {
+      throw new Error("Supabase library did not load.");
+    }
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (err) {
+    console.error("Supabase init failed:", err);
+    supabaseClient = null;
+  }
+
+  // Firebase, via dynamic import so a network/CDN failure can't take down
+  // the rest of the script.
+  try {
+    const [{ initializeApp }, firestoreMod] = await Promise.all([
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
+    ]);
+    const firebaseApp = initializeApp(firebaseConfig);
+    db = firestoreMod.getFirestore(firebaseApp);
+    firebaseFns = {
+      collection: firestoreMod.collection,
+      addDoc: firestoreMod.addDoc,
+      onSnapshot: firestoreMod.onSnapshot,
+      query: firestoreMod.query,
+      where: firestoreMod.where,
+      orderBy: firestoreMod.orderBy,
+      serverTimestamp: firestoreMod.serverTimestamp,
+    };
+  } catch (err) {
+    console.error("Firebase init failed:", err);
+    db = null;
+    firebaseFns = null;
+  }
+
+  if (!supabaseClient) {
+    showBackendWarning("Product catalog is temporarily unavailable — please refresh in a moment.");
+  } else if (!db) {
+    showBackendWarning("Orders are temporarily unavailable — you can still browse products.");
+  }
+
+  // Products depend on Supabase only, so try loading them once the client
+  // is ready even if this resolves after the shop screen is already open.
+  if (supabaseClient && !shopScreen.hidden) {
+    loadProducts();
+  }
+}
+
+initBackend();
+
+// ============================================================================
 // Products (Supabase, public read)
 // ============================================================================
 async function loadProducts() {
+  if (!supabaseClient) {
+    productGrid.innerHTML = `<p class="empty-state">Products will appear here once the store connects — try refreshing shortly.</p>`;
+    itemCountPill.textContent = "0 items";
+    return;
+  }
+
   productGrid.innerHTML = `<p class="loading-state">Loading products…</p>`;
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from("products")
     .select("*")
     .order("name", { ascending: true });
@@ -288,7 +369,7 @@ function escapeHtml(str) {
 }
 
 // ============================================================================
-// Cart drawer
+// Cart drawer (fully local — works regardless of backend state)
 // ============================================================================
 function renderCartFromStorage() {
   const cart = getCart();
@@ -356,6 +437,11 @@ checkoutBtn.addEventListener("click", async () => {
   const entries = Object.entries(cart);
   if (!session || entries.length === 0) return;
 
+  if (!db || !firebaseFns) {
+    alert("Orders aren't connected yet — please try again in a moment.");
+    return;
+  }
+
   checkoutBtn.disabled = true;
   checkoutBtn.textContent = "Placing order…";
 
@@ -368,13 +454,13 @@ checkoutBtn.addEventListener("click", async () => {
   const total = items.reduce((sum, i) => sum + i.qty * i.price, 0);
 
   try {
-    await addDoc(collection(db, "orders"), {
+    await firebaseFns.addDoc(firebaseFns.collection(db, "orders"), {
       customerName: session.name,
       customerPhone: session.phone,
       items,
       total,
       status: "pending",
-      createdAt: serverTimestamp(),
+      createdAt: firebaseFns.serverTimestamp(),
     });
     setCart({});
     renderCartFromStorage();
@@ -404,17 +490,23 @@ let ordersUnsubscribe = null;
 function loadOrders() {
   const session = getSession();
   if (!session) return;
+
+  if (!db || !firebaseFns) {
+    ordersBody.innerHTML = `<p class="empty-state">Orders aren't connected yet — please try again in a moment.</p>`;
+    return;
+  }
+
   ordersBody.innerHTML = `<p class="loading-state">Loading your orders…</p>`;
 
   if (ordersUnsubscribe) ordersUnsubscribe();
 
-  const ordersQuery = query(
-    collection(db, "orders"),
-    where("customerPhone", "==", session.phone),
-    orderBy("createdAt", "desc")
+  const ordersQuery = firebaseFns.query(
+    firebaseFns.collection(db, "orders"),
+    firebaseFns.where("customerPhone", "==", session.phone),
+    firebaseFns.orderBy("createdAt", "desc")
   );
 
-  ordersUnsubscribe = onSnapshot(
+  ordersUnsubscribe = firebaseFns.onSnapshot(
     ordersQuery,
     (snapshot) => {
       const orders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
