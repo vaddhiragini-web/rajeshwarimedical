@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rajeshwari Medical & General Stores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="store.css" />
+</head>
+<body>
+
+  <!-- LOGIN SCREEN -->
+  <section id="login-screen" class="screen">
+    <div class="login-card">
+      <h1>Welcome back</h1>
+      <p class="login-sub">Enter your details to start ordering</p>
+
+      <form id="login-form">
+        <label for="c-name">Your Name</label>
+        <input type="text" id="c-name" class="text-field" required placeholder="Enter your name" autocomplete="name" />
+
+        <label for="c-phone">Mobile Number</label>
+        <div class="phone-field">
+          <span class="phone-code">+91</span>
+          <input type="tel" id="c-phone" required inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile number" autocomplete="tel-national" />
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">Start Shopping →</button>
+        <p id="login-error" class="error-text" hidden></p>
+      </form>
+
+      <div class="login-foot">
+        <button type="button" id="admin-login-link" class="btn-text">Admin Login</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOP SCREEN -->
+  <section id="shop-screen" class="screen" hidden>
+    <header class="shop-header">
+      <div class="brand">
+        <span class="mark">℞</span>
+        <div>
+          <div>Rajeshwari Medical</div>
+          <div class="tag">& General Stores</div>
+        </div>
+      </div>
+
+      <nav class="shop-nav">
+        <button type="button" class="link" id="nav-orders">Previous Orders</button>
+        <a href="#" class="active">Shop</a>
+        <button type="button" class="cart-btn" id="open-cart-btn">
+          🛒 Cart <span class="cart-count" id="cart-count">0</span>
+        </button>
+        <span class="user-chip" id="user-chip">—</span>
+        <button type="button" class="link" id="logout-btn">Logout</button>
+      </nav>
+    </header>
+
+    <div class="hero">
+      <div class="hero-copy">
+        <h1>Everything your home pharmacy needs</h1>
+        <p>Genuine medicines and everyday essentials, delivered fresh from our shelves to your door.</p>
+      </div>
+    </div>
+
+    <div class="shop-toolbar">
+      <label class="search-field">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="search-input" placeholder="Search products..." />
+      </label>
+      <span class="item-count-pill" id="item-count-pill">0 items</span>
+    </div>
+
+    <div class="product-grid" id="product-grid">
+      <p class="loading-state">Loading products…</p>
+    </div>
+  </section>
+
+  <!-- CART DRAWER -->
+  <div class="drawer-backdrop" id="cart-backdrop" hidden></div>
+  <aside class="drawer" id="cart-drawer" hidden aria-label="Cart">
+    <div class="drawer-head">
+      <h2>Your Cart</h2>
+      <button type="button" class="close-btn" id="close-cart-btn">✕</button>
+    </div>
+    <div class="drawer-body" id="cart-body">
+      <p class="loading-state">Your cart is empty.</p>
+    </div>
+    <div class="drawer-foot">
+      <div class="total-row">
+        <span>Total</span>
+        <span id="cart-total">₹0.00</span>
+      </div>
+      <button type="button" class="btn btn-primary btn-block" id="checkout-btn">Place Order</button>
+    </div>
+  </aside>
+
+  <!-- ORDERS DRAWER -->
+  <div class="drawer-backdrop" id="orders-backdrop" hidden></div>
+  <aside class="drawer" id="orders-drawer" hidden aria-label="Previous orders">
+    <div class="drawer-head">
+      <h2>Previous Orders</h2>
+      <button type="button" class="close-btn" id="close-orders-btn">✕</button>
+    </div>
+    <div class="drawer-body" id="orders-body">
+      <p class="loading-state">Loading your orders…</p>
+    </div>
+  </aside>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script type="module" src="store.js"></script>
+</body>
+</html>
