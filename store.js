@@ -15,9 +15,9 @@ const SUPABASE_URL = "https://eqqxjfzokwqsamznvikb.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxcXhqZnpva3dxc2Ftem52aWtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MDI2MTIsImV4cCI6MjEwMDM3ODYxMn0.dOcs7w0B7Iw99B4-sXbi1ZLas08hg3xUrrkYyUuN3Po";
 
-// Where the "Admin Login" link should send staff. Adjust to whatever your
-// admin console file is actually named/hosted at.
-const ADMIN_LOGIN_URL = "index.html";
+// Where the Admin Login form should send staff after a *successful* login.
+// Adjust to whatever your admin console file is actually named/hosted at.
+const ADMIN_CONSOLE_URL = "admin.html";
 
 // A generic placeholder image for products that don't have one in the DB.
 // If you add an "image_url" column to the products table it will be used
@@ -26,24 +26,27 @@ const FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=400&auto=format&fit=crop";
 
 // ============================================================================
-// IMPORTANT FIX
+// IMPORTANT FIXES IN THIS VERSION
 // ----------------------------------------------------------------------------
-// Previously, Firebase/Supabase were set up with top-level `import` statements
-// and a top-level `supabase.createClient(...)` call. If the Firebase CDN
-// script failed to load (slow network, ad-blocker, offline testing, a typo in
-// the URL, etc.), the *entire* module would fail to execute — which meant
-// none of the event listeners below (including the login form's submit
-// handler) were ever attached. The visible symptom of that is exactly what
-// was reported: you fill in the login form, hit "Start Shopping", and
-// nothing happens / the page just reloads — the store never opens.
+// 1) SCREEN SWITCHING BUG (the reported issue)
+//    The login card and the shop page were both visible at once. This was a
+//    CSS specificity bug, not a JS bug: #login-screen / #shop-screen set
+//    `display:flex` on an ID selector, which beat the generic
+//    `.screen[hidden] { display:none }` rule. So toggling the `hidden`
+//    attribute here in JS never actually hid anything. Fixed in store.css
+//    with `#id[hidden] { display: none !important; }` for every screen.
 //
-// The fix: the login screen, session handling, and cart are now fully local
-// (localStorage-based) and are wired up FIRST, synchronously, with zero
-// dependency on Firebase or Supabase. Firebase/Supabase are then initialised
-// separately, inside try/catch, using a dynamic import() for Firebase. If
-// that initialisation fails, the store still opens — you just see a small
-// banner explaining that product loading / orders aren't available yet,
-// instead of being stuck on the login screen.
+// 2) ADMIN LOGIN
+//    "Admin Login" previously navigated straight to another page. It now
+//    shows an in-app Admin Login screen (same card styling as the customer
+//    login) with Username + Password. On submit it does a lightweight
+//    client-side check and then hands off to the real admin console at
+//    ADMIN_CONSOLE_URL. Wire the TODO below up to your real auth (Firebase
+//    Auth / Supabase Auth) when ready.
+//
+// Firebase/Supabase are initialised separately, inside try/catch, using a
+// dynamic import() for Firebase, so a slow/blocked CDN never blocks login,
+// browsing, or the cart — you just see a small banner instead.
 // ============================================================================
 
 // ============================================================================
@@ -81,10 +84,16 @@ function setCart(cart) {
 // Element refs
 // ============================================================================
 const loginScreen = document.getElementById("login-screen");
+const adminLoginScreen = document.getElementById("admin-login-screen");
 const shopScreen = document.getElementById("shop-screen");
+
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
 const adminLoginLink = document.getElementById("admin-login-link");
+
+const adminLoginForm = document.getElementById("admin-login-form");
+const adminLoginError = document.getElementById("admin-login-error");
+const backToCustomerLink = document.getElementById("back-to-customer-link");
 
 const backendWarning = document.getElementById("backend-warning");
 
@@ -126,18 +135,33 @@ function showBackendWarning(message) {
 }
 
 // ============================================================================
+// Screen helper — makes sure exactly one top-level screen is visible.
+// ============================================================================
+function showScreen(name) {
+  loginScreen.hidden = name !== "login";
+  adminLoginScreen.hidden = name !== "admin-login";
+  shopScreen.hidden = name !== "shop";
+}
+
+// ============================================================================
 // Boot — login/shop toggle + cart wiring first, no backend dependency.
 // ============================================================================
 adminLoginLink.addEventListener("click", () => {
-  window.location.href = ADMIN_LOGIN_URL;
+  adminLoginError.hidden = true;
+  adminLoginForm.reset();
+  showScreen("admin-login");
+});
+
+backToCustomerLink.addEventListener("click", () => {
+  loginError.hidden = true;
+  showScreen("login");
 });
 
 const existingSession = getSession();
 if (existingSession) {
   enterShop(existingSession);
 } else {
-  loginScreen.hidden = false;
-  shopScreen.hidden = true;
+  showScreen("login");
 }
 
 loginForm.addEventListener("submit", (e) => {
@@ -161,12 +185,11 @@ loginForm.addEventListener("submit", (e) => {
 
   const session = { name, phone: `+91${phoneDigits}` };
   setSession(session);
-  enterShop(session);
+  enterShop(session); // <-- this is the redirect: hides login, shows the shop
 });
 
 function enterShop(session) {
-  loginScreen.hidden = true;
-  shopScreen.hidden = false;
+  showScreen("shop");
   userChip.textContent = session.name || session.phone;
   renderCartFromStorage();
   loadProducts(); // safe no-op / friendly error if backend isn't ready
@@ -174,9 +197,30 @@ function enterShop(session) {
 
 logoutBtn.addEventListener("click", () => {
   clearSession();
-  shopScreen.hidden = true;
-  loginScreen.hidden = false;
   loginForm.reset();
+  showScreen("login");
+});
+
+// ============================================================================
+// Admin login (client-side gate — swap the TODO for real Firebase/Supabase
+// auth when you're ready; this just controls hand-off to the admin console).
+// ============================================================================
+adminLoginForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  adminLoginError.hidden = true;
+
+  const username = document.getElementById("a-username").value.trim();
+  const password = document.getElementById("a-password").value;
+
+  if (!username || !password) {
+    adminLoginError.textContent = "Enter both username and password.";
+    adminLoginError.hidden = false;
+    return;
+  }
+
+  // TODO: replace with real authentication (e.g. Firebase Auth
+  // signInWithEmailAndPassword, or a Supabase Auth call) before going live.
+  window.location.href = ADMIN_CONSOLE_URL;
 });
 
 // ============================================================================
