@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin · Rajeshwari Medical & General Stores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="store.css" />
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+  <header class="admin-header">
+    <div class="brand">
+      <span class="mark">℞</span>
+      <div>
+        <div>Rajeshwari Medical <span class="admin-tag">/ Admin</span></div>
+        <div class="tag">& General Stores</div>
+      </div>
+    </div>
+    <div class="admin-header-right">
+      <span class="admin-pill">Admin</span>
+      <button type="button" class="link" id="admin-logout-btn">⏻ Logout</button>
+    </div>
+  </header>
+
+  <div class="admin-wrap">
+
+    <nav class="admin-tabs" id="admin-tabs">
+      <button type="button" class="admin-tab active" data-tab="stats">Stats</button>
+      <button type="button" class="admin-tab" data-tab="orders">Orders</button>
+      <button type="button" class="admin-tab" data-tab="products">Products</button>
+      <button type="button" class="admin-tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <p id="admin-backend-warning" class="backend-warning" hidden></p>
+
+    <!-- STATS PANEL -->
+    <section class="admin-panel" id="panel-stats">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <p class="stat-label">Total orders</p>
+          <p class="stat-value" id="stat-total-orders">—</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Pending orders</p>
+          <p class="stat-value" id="stat-pending-orders">—</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Fulfilled orders</p>
+          <p class="stat-value" id="stat-fulfilled-orders">—</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Total revenue</p>
+          <p class="stat-value" id="stat-total-revenue">—</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ORDERS PANEL -->
+    <section class="admin-panel" id="panel-orders" hidden>
+      <div class="live-bar">
+        <span class="live-label"><span class="live-dot" id="live-dot"></span> <span id="live-text">Site LIVE</span></span>
+        <label class="switch">
+          <input type="checkbox" id="site-live-toggle" checked />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+
+      <p class="admin-section-title" id="orders-count-title">All recent orders (0 total)</p>
+
+      <div class="table-scroll">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>When</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body">
+            <tr><td colspan="8" class="admin-empty">Loading orders…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PRODUCTS PANEL -->
+    <section class="admin-panel" id="panel-products" hidden>
+      <form id="product-form" class="product-form">
+        <input type="hidden" id="p-id" />
+        <div class="product-form-grid">
+          <div>
+            <label for="p-name">Name</label>
+            <input type="text" id="p-name" class="text-field" required placeholder="e.g. Paracetamol 500mg" />
+          </div>
+          <div>
+            <label for="p-category">Category</label>
+            <input type="text" id="p-category" class="text-field" placeholder="e.g. Tablets" />
+          </div>
+          <div>
+            <label for="p-price">Price (₹)</label>
+            <input type="number" id="p-price" class="text-field" required min="0" step="0.01" placeholder="0.00" />
+          </div>
+          <div>
+            <label for="p-stock">Stock</label>
+            <input type="number" id="p-stock" class="text-field" required min="0" step="1" placeholder="0" />
+          </div>
+          <div class="product-form-wide">
+            <label for="p-image">Image URL (optional)</label>
+            <input type="url" id="p-image" class="text-field" placeholder="https://…" />
+          </div>
+        </div>
+        <div class="product-form-actions">
+          <button type="submit" class="btn btn-primary" id="product-submit-btn">Add Product</button>
+          <button type="button" class="btn btn-ghost" id="product-cancel-btn" hidden>Cancel Edit</button>
+        </div>
+        <p id="product-form-error" class="error-text" hidden></p>
+      </form>
+
+      <p class="admin-section-title">Catalog</p>
+      <div class="table-scroll">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="products-table-body">
+            <tr><td colspan="5" class="admin-empty">Loading products…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SETTINGS PANEL -->
+    <section class="admin-panel" id="panel-settings" hidden>
+      <div class="live-bar">
+        <span class="live-label"><span class="live-dot" id="live-dot-2"></span> <span id="live-text-2">Site LIVE</span></span>
+        <label class="switch">
+          <input type="checkbox" id="site-live-toggle-2" checked />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <p class="settings-note">Turning this off shows customers a "closed" message instead of the shop when they log in. Toggling it here updates instantly for everyone.</p>
+    </section>
+
+  </div>
+
+  <button type="button" class="connect-printer-btn" id="connect-printer-btn">
+    🖶 Connect Printer
+  </button>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
