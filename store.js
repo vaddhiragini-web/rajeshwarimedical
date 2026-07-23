@@ -1,5 +1,7 @@
-give me full script for all the buttons work and run // ============================================================================
-// CONFIG — reuses the same Firebase + Supabase project as the admin console.
+// ============================================================================
+// ADMIN CONSOLE — admin.html loads this file (<script type="module" src="admin.js">).
+// Reuses the SAME Firebase + Supabase project as the customer store (store.js)
+// so orders/products stay in sync between the two apps in real time.
 // ============================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyDDwC_AojbttZKz9LmKk-7wH46yS6cq9Ic",
@@ -15,820 +17,123 @@ const SUPABASE_URL = "https://eqqxjfzokwqsamznvikb.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxcXhqZnpva3dxc2Ftem52aWtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MDI2MTIsImV4cCI6MjEwMDM3ODYxMn0.dOcs7w0B7Iw99B4-sXbi1ZLas08hg3xUrrkYyUuN3Po";
 
-// Where the Admin Login form should send staff after a *successful* login.
-// Adjust to whatever your admin console file is actually named/hosted at.
-const ADMIN_CONSOLE_URL = "admin.html";
+// Where the "Logout" button should send the admin back to.
+// Adjust to whatever your customer-facing store file is actually named.
+const STORE_URL = "index.html";
 
-// A generic placeholder image for products that don't have one in the DB.
-// If you add an "image_url" column to the products table it will be used
-// automatically instead.
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=400&auto=format&fit=crop";
-
-// ============================================================================
-// IMPORTANT FIXES IN THIS VERSION
-// ----------------------------------------------------------------------------
-// 1) SCREEN SWITCHING BUG (the reported issue)
-//    The login card and the shop page were both visible at once. This was a
-//    CSS specificity bug, not a JS bug: #login-screen / #shop-screen set
-//    `display:flex` on an ID selector, which beat the generic
-//    `.screen[hidden] { display:none }` rule. So toggling the `hidden`
-//    attribute here in JS never actually hid anything. Fixed in store.css
-//    with `#id[hidden] { display: none !important; }` for every screen.
-//
-// 2) ADMIN LOGIN
-//    "Admin Login" previously navigated straight to another page. It now
-//    shows an in-app Admin Login screen (same card styling as the customer
-//    login) with Username + Password. On submit it does a lightweight
-//    client-side check and then hands off to the real admin console at
-//    ADMIN_CONSOLE_URL. Wire the TODO below up to your real auth (Firebase
-//    Auth / Supabase Auth) when ready.
-//
-// Firebase/Supabase are initialised separately, inside try/catch, using a
-// dynamic import() for Firebase, so a slow/blocked CDN never blocks login,
-// browsing, or the cart — you just see a small banner instead.
-// ============================================================================
-
-// ============================================================================
-// Local "customer session" — name + phone, stored on this device.
-// ============================================================================
-const SESSION_KEY = "rmg_customer_session";
-const CART_KEY = "rmg_cart";
-
-function getSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-  } catch {
-    return null;
-  }
-}
-function setSession(session) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-function getCart() {
-  try {
-    return JSON.parse(localStorage.getItem(CART_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-function setCart(cart) {
-  localStorage.setItem(CART_KEY, JSON.stringify(cart));
-}
+// Firestore doc that controls the customer-facing "site is live" switch.
+// store.js can read this same doc (settings/site -> field "live") to show a
+// closed banner to customers — wire that up on the customer side if not
+// already done.
+const SETTINGS_DOC_PATH = ["settings", "site"];
 
 // ============================================================================
 // Element refs
 // ============================================================================
-const loginScreen = document.getElementById("login-screen");
-const adminLoginScreen = document.getElementById("admin-login-screen");
-const shopScreen = document.getElementById("shop-screen");
-
-const loginForm = document.getElementById("login-form");
-const loginError = document.getElementById("login-error");
-const adminLoginLink = document.getElementById("admin-login-link");
-
-const adminLoginForm = document.getElementById("admin-login-form");
-const adminLoginError = document.getElementById("admin-login-error");
-const backToCustomerLink = document.getElementById("back-to-customer-link");
-
-const backendWarning = document.getElementById("backend-warning");
-
-const userChip = document.getElementById("user-chip");
-const logoutBtn = document.getElementById("logout-btn");
-
-const searchInput = document.getElementById("search-input");
-const itemCountPill = document.getElementById("item-count-pill");
-const productGrid = document.getElementById("product-grid");
-
-const cartCountEl = document.getElementById("cart-count");
-const openCartBtn = document.getElementById("open-cart-btn");
-const closeCartBtn = document.getElementById("close-cart-btn");
-const cartBackdrop = document.getElementById("cart-backdrop");
-const cartDrawer = document.getElementById("cart-drawer");
-const cartBody = document.getElementById("cart-body");
-const cartTotalEl = document.getElementById("cart-total");
-const checkoutBtn = document.getElementById("checkout-btn");
-
-const navOrdersBtn = document.getElementById("nav-orders");
-const closeOrdersBtn = document.getElementById("close-orders-btn");
-const ordersBackdrop = document.getElementById("orders-backdrop");
-const ordersDrawer = document.getElementById("orders-drawer");
-const ordersBody = document.getElementById("orders-body");
-
-let allProducts = [];
-
-// Backend handles — filled in by initBackend() if it succeeds. Every
-// function that uses them checks for null first, so a failed/slow backend
-// never blocks login, browsing the (empty) grid, or the cart drawer.
-let db = null;
-let supabaseClient = null;
-let firebaseFns = null; // { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp }
-
-function showBackendWarning(message) {
-  if (!backendWarning) return;
-  backendWarning.textContent = message;
-  backendWarning.hidden = false;
-}
-
-// ============================================================================
-// Screen helper — makes sure exactly one top-level screen is visible.
-// ============================================================================
-function showScreen(name) {
-  loginScreen.hidden = name !== "login";
-  adminLoginScreen.hidden = name !== "admin-login";
-  shopScreen.hidden = name !== "shop";
-}
-
-// ============================================================================
-// Boot — login/shop toggle + cart wiring first, no backend dependency.
-// ============================================================================
-adminLoginLink.addEventListener("click", () => {
-  adminLoginError.hidden = true;
-  adminLoginForm.reset();
-  showScreen("admin-login");
-});
-
-backToCustomerLink.addEventListener("click", () => {
-  loginError.hidden = true;
-  showScreen("login");
-});
-
-const existingSession = getSession();
-if (existingSession) {
-  enterShop(existingSession);
-} else {
-  showScreen("login");
-}
-
-loginForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  loginError.hidden = true;
-
-  const name = document.getElementById("c-name").value.trim();
-  const phoneDigits = document.getElementById("c-phone").value.trim();
-
-  if (!name) {
-    loginError.textContent = "Please enter your name.";
-    loginError.hidden = false;
-    return;
-  }
-
-  if (!/^[0-9]{10}$/.test(phoneDigits)) {
-    loginError.textContent = "Enter a valid 10-digit mobile number.";
-    loginError.hidden = false;
-    return;
-  }
-
-  const session = { name, phone: `+91${phoneDigits}` };
-  setSession(session);
-  enterShop(session); // <-- this is the redirect: hides login, shows the shop
-});
-
-function enterShop(session) {
-  showScreen("shop");
-  userChip.textContent = session.name || session.phone;
-  renderCartFromStorage();
-  loadProducts(); // safe no-op / friendly error if backend isn't ready
-}
-
-logoutBtn.addEventListener("click", () => {
-  clearSession();
-  loginForm.reset();
-  showScreen("login");
-});
-
-// ============================================================================
-// Admin login (client-side gate — swap the TODO for real Firebase/Supabase
-// auth when you're ready; this just controls hand-off to the admin console).
-// ============================================================================
-adminLoginForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  adminLoginError.hidden = true;
-
-  const username = document.getElementById("a-username").value.trim();
-  const password = document.getElementById("a-password").value;
-
-  if (!username || !password) {
-    adminLoginError.textContent = "Enter both username and password.";
-    adminLoginError.hidden = false;
-    return;
-  }
-
-  // TODO: replace with real authentication (e.g. Firebase Auth
-  // signInWithEmailAndPassword, or a Supabase Auth call) before going live.
-  window.location.href = ADMIN_CONSOLE_URL;
-});
-
-// ============================================================================
-// Backend init (Firebase + Supabase) — isolated so a failure here can never
-// stop the store screen from opening.
-// ============================================================================
-async function initBackend() {
-  // Supabase client (loaded as a classic <script> before this module, so
-  // window.supabase should already exist — but guard it anyway).
-  try {
-    if (!window.supabase) {
-      throw new Error("Supabase library did not load.");
-    }
-    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } catch (err) {
-    console.error("Supabase init failed:", err);
-    supabaseClient = null;
-  }
-
-  // Firebase, via dynamic import so a network/CDN failure can't take down
-  // the rest of the script.
-  try {
-    const [{ initializeApp }, firestoreMod] = await Promise.all([
-      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
-      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
-    ]);
-    const firebaseApp = initializeApp(firebaseConfig);
-    db = firestoreMod.getFirestore(firebaseApp);
-    firebaseFns = {
-      collection: firestoreMod.collection,
-      addDoc: firestoreMod.addDoc,
-      onSnapshot: firestoreMod.onSnapshot,
-      query: firestoreMod.query,
-      where: firestoreMod.where,
-      orderBy: firestoreMod.orderBy,
-      serverTimestamp: firestoreMod.serverTimestamp,
-    };
-  } catch (err) {
-    console.error("Firebase init failed:", err);
-    db = null;
-    firebaseFns = null;
-  }
-
-  if (!supabaseClient) {
-    showBackendWarning("Product catalog is temporarily unavailable — please refresh in a moment.");
-  } else if (!db) {
-    showBackendWarning("Orders are temporarily unavailable — you can still browse products.");
-  }
-
-  // Products depend on Supabase only, so try loading them once the client
-  // is ready even if this resolves after the shop screen is already open.
-  if (supabaseClient && !shopScreen.hidden) {
-    loadProducts();
-  }
-}
-
-initBackend();
-
-// ============================================================================
-// Products (Supabase, public read)
-// ============================================================================
-async function loadProducts() {
-  if (!supabaseClient) {
-    productGrid.innerHTML = `<p class="empty-state">Products will appear here once the store connects — try refreshing shortly.</p>`;
-    itemCountPill.textContent = "0 items";
-    return;
-  }
-
-  productGrid.innerHTML = `<p class="loading-state">Loading products…</p>`;
-  const { data, error } = await supabaseClient
-    .from("products")
-    .select("*")
-    .order("name", { ascending: true });
-
-  if (error) {
-    productGrid.innerHTML = `<p class="empty-state">Couldn't load products: ${escapeHtml(error.message)}</p>`;
-    return;
-  }
-  allProducts = data || [];
-  renderGrid(allProducts);
-}
-
-searchInput.addEventListener("input", () => {
-  const term = searchInput.value.trim().toLowerCase();
-  const filtered = term
-    ? allProducts.filter(
-        (p) =>
-          (p.name || "").toLowerCase().includes(term) ||
-          (p.category || "").toLowerCase().includes(term)
-      )
-    : allProducts;
-  renderGrid(filtered);
-});
-
-function renderGrid(products) {
-  itemCountPill.textContent = `${products.length} item${products.length === 1 ? "" : "s"}`;
-
-  if (products.length === 0) {
-    productGrid.innerHTML = `<p class="empty-state">No products match your search.</p>`;
-    return;
-  }
-
-  const cart = getCart();
-
-  productGrid.innerHTML = products
-    .map((p) => {
-      const qty = cart[p.id]?.qty || 0;
-      const outOfStock = Number(p.stock) <= 0;
-      const img = p.image_url || FALLBACK_IMAGE;
-      return `
-        <div class="product-card" data-id="${p.id}">
-          <div class="product-media">
-            <img src="${img}" alt="${escapeHtml(p.name)}" loading="lazy" />
-            <span class="price-badge">₹${Number(p.price).toFixed(0)} / unit</span>
-          </div>
-          <div class="product-body">
-            ${p.category ? `<p class="product-cat">${escapeHtml(p.category)}</p>` : ""}
-            <h3>${escapeHtml(p.name)}</h3>
-            <p class="product-unit">${outOfStock ? "Out of stock" : `${p.stock} in stock`}</p>
-            <div class="qty-slot">
-              ${
-                qty > 0
-                  ? `<div class="stepper">
-                       <button type="button" class="dec-btn">−</button>
-                       <span>${qty}</span>
-                       <button type="button" class="inc-btn" ${qty >= p.stock ? "disabled" : ""}>+</button>
-                     </div>`
-                  : `<button type="button" class="add-btn" ${outOfStock ? "disabled" : ""}>${outOfStock ? "Unavailable" : "Add to Cart"}</button>`
-              }
-            </div>
-          </div>
-        </div>`;
-    })
-    .join("");
-
-  productGrid.querySelectorAll(".add-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, 1);
-    });
-  });
-  productGrid.querySelectorAll(".inc-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, 1);
-    });
-  });
-  productGrid.querySelectorAll(".dec-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, -1);
-    });
-  });
-}
-
-function changeQty(productId, delta) {
-  const product = allProducts.find((p) => p.id === productId);
-  if (!product) return;
-
-  const cart = getCart();
-  const current = cart[productId]?.qty || 0;
-  const next = Math.max(0, Math.min(product.stock, current + delta));
-
-  if (next === 0) {
-    delete cart[productId];
-  } else {
-    cart[productId] = {
-      qty: next,
-      name: product.name,
-      price: product.price,
-      image_url: product.image_url || FALLBACK_IMAGE,
-    };
-  }
-  setCart(cart);
-  renderGrid(searchInput.value.trim() ? filteredByCurrentSearch() : allProducts);
-  renderCartFromStorage();
-}
-
-function filteredByCurrentSearch() {
-  const term = searchInput.value.trim().toLowerCase();
-  return allProducts.filter(
-    (p) => (p.name || "").toLowerCase().includes(term) || (p.category || "").toLowerCase().includes(term)
-  );
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str ?? "";
-  return div.innerHTML;
-}
-
-// ============================================================================
-// Cart drawer (fully local — works regardless of backend state)
-// ============================================================================
-function renderCartFromStorage() {
-  const cart = getCart();
-  const entries = Object.entries(cart);
-  const totalQty = entries.reduce((sum, [, item]) => sum + item.qty, 0);
-  const totalPrice = entries.reduce((sum, [, item]) => sum + item.qty * item.price, 0);
-
-  cartCountEl.textContent = totalQty;
-  cartTotalEl.textContent = `₹${totalPrice.toFixed(2)}`;
-  checkoutBtn.disabled = totalQty === 0;
-
-  if (entries.length === 0) {
-    cartBody.innerHTML = `<p class="loading-state">Your cart is empty.</p>`;
-    return;
-  }
-
-  cartBody.innerHTML = entries
-    .map(
-      ([id, item]) => `
-        <div class="cart-line" data-id="${id}">
-          <img src="${item.image_url}" alt="${escapeHtml(item.name)}" />
-          <div class="cart-line-info">
-            <h4>${escapeHtml(item.name)}</h4>
-            <span>₹${Number(item.price).toFixed(2)} each</span><br/>
-            <button type="button" class="remove-btn">Remove</button>
-          </div>
-          <div class="stepper">
-            <button type="button" class="dec-btn">−</button>
-            <span>${item.qty}</span>
-            <button type="button" class="inc-btn">+</button>
-          </div>
-        </div>`
-    )
-    .join("");
-
-  cartBody.querySelectorAll(".inc-btn").forEach((btn) => {
-    btn.addEventListener("click", () => changeQty(btn.closest(".cart-line").dataset.id, 1));
-  });
-  cartBody.querySelectorAll(".dec-btn").forEach((btn) => {
-    btn.addEventListener("click", () => changeQty(btn.closest(".cart-line").dataset.id, -1));
-  });
-  cartBody.querySelectorAll(".remove-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const cart = getCart();
-      delete cart[btn.closest(".cart-line").dataset.id];
-      setCart(cart);
-      renderCartFromStorage();
-      renderGrid(searchInput.value.trim() ? filteredByCurrentSearch() : allProducts);
-    });
-  });
-}
-
-openCartBtn.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, true));
-closeCartBtn.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
-cartBackdrop.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
-
-function toggleDrawer(drawer, backdrop, show) {
-  drawer.hidden = !show;
-  backdrop.hidden = !show;
-}
-
-checkoutBtn.addEventListener("click", async () => {
-  const session = getSession();
-  const cart = getCart();
-  const entries = Object.entries(cart);
-  if (!session || entries.length === 0) return;
-
-  if (!db || !firebaseFns) {
-    alert("Orders aren't connected yet — please try again in a moment.");
-    return;
-  }
-
-  checkoutBtn.disabled = true;
-  checkoutBtn.textContent = "Placing order…";
-
-  const items = entries.map(([id, item]) => ({
-    productId: id,
-    name: item.name,
-    qty: item.qty,
-    price: item.price,
-  }));
-  const total = items.reduce((sum, i) => sum + i.qty * i.price, 0);
-
-  try {
-    await firebaseFns.addDoc(firebaseFns.collection(db, "orders"), {
-      customerName: session.name,
-      customerPhone: session.phone,
-      items,
-      total,
-      status: "pending",
-      createdAt: firebaseFns.serverTimestamp(),
-    });
-    setCart({});
-    renderCartFromStorage();
-    renderGrid(allProducts);
-    toggleDrawer(cartDrawer, cartBackdrop, false);
-    alert("Order placed! You can track it under Previous Orders.");
-  } catch (err) {
-    alert("Couldn't place order: " + err.message);
-  } finally {
-    checkoutBtn.disabled = false;
-    checkoutBtn.textContent = "Place Order";
-  }
-});
-
-// ============================================================================
-// Previous orders (Firestore, filtered to this customer's phone number)
-// ============================================================================
-navOrdersBtn.addEventListener("click", () => {
-  toggleDrawer(ordersDrawer, ordersBackdrop, true);
-  loadOrders();
-});
-closeOrdersBtn.addEventListener("click", () => toggleDrawer(ordersDrawer, ordersBackdrop, false));
-ordersBackdrop.addEventListener("click", () => toggleDrawer(ordersDrawer, ordersBackdrop, false));
-
-let ordersUnsubscribe = null;
-
-function loadOrders() {
-  const session = getSession();
-  if (!session) return;
-
-  if (!db || !firebaseFns) {
-    ordersBody.innerHTML = `<p class="empty-state">Orders aren't connected yet — please try again in a moment.</p>`;
-    return;
-  }
-
-  ordersBody.innerHTML = `<p class="loading-state">Loading your orders…</p>`;
-
-  if (ordersUnsubscribe) ordersUnsubscribe();
-
-  const ordersQuery = firebaseFns.query(
-    firebaseFns.collection(db, "orders"),
-    firebaseFns.where("customerPhone", "==", session.phone),
-    firebaseFns.orderBy("createdAt", "desc")
-  );
-
-  ordersUnsubscribe = firebaseFns.onSnapshot(
-    ordersQuery,
-    (snapshot) => {
-      const orders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      renderOrders(orders);
-    },
-    (err) => {
-      ordersBody.innerHTML = `<p class="empty-state">Couldn't load orders: ${escapeHtml(err.message)}</p>`;
-    }
-  );
-}
-
-function renderOrders(orders) {
-  if (orders.length === 0) {
-    ordersBody.innerHTML = `<p class="loading-state">No orders yet — go place your first one!</p>`;
-    return;
-  }
-  ordersBody.innerHTML = orders
-    .map((o) => {
-      const itemsSummary = Array.isArray(o.items)
-        ? o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")
-        : "—";
-      const placed = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "Just now";
-      const status = o.status || "pending";
-      return `
-        <div class="order-card">
-          <div class="order-card-head">
-            <strong>₹${Number(o.total || 0).toFixed(2)}</strong>
-            <span class="status-pill ${status}">${status}</span>
-          </div>
-          <p class="order-items">${escapeHtml(itemsSummary)}</p>
-          <p class="order-meta">${placed}</p>
-        </div>`;
-    })
-    .join("");
-}// ============================================================================
-// CONFIG — reuses the same Firebase + Supabase project as the admin console.
-// ============================================================================
-const firebaseConfig = {
-  apiKey: "AIzaSyDDwC_AojbttZKz9LmKk-7wH46yS6cq9Ic",
-  authDomain: "rajeshwarimedical-78b78.firebaseapp.com",
-  projectId: "rajeshwarimedical-78b78",
-  storageBucket: "rajeshwarimedical-78b78.firebasestorage.app",
-  messagingSenderId: "818567753854",
-  appId: "1:818567753854:web:65509e76ac464cfcf0282f",
-  measurementId: "G-0CJJHQKZWS",
+const tabsNav = document.getElementById("admin-tabs");
+const panels = {
+  stats: document.getElementById("panel-stats"),
+  orders: document.getElementById("panel-orders"),
+  products: document.getElementById("panel-products"),
+  settings: document.getElementById("panel-settings"),
 };
 
-const SUPABASE_URL = "https://eqqxjfzokwqsamznvikb.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxcXhqZnpva3dxc2Ftem52aWtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MDI2MTIsImV4cCI6MjEwMDM3ODYxMn0.dOcs7w0B7Iw99B4-sXbi1ZLas08hg3xUrrkYyUuN3Po";
+const backendWarning = document.getElementById("admin-backend-warning");
+const logoutBtn = document.getElementById("admin-logout-btn");
 
-// Where the Admin Login form should send staff after a *successful* login.
-// Adjust to whatever your admin console file is actually named/hosted at.
-const ADMIN_CONSOLE_URL = "admin.html";
+const statTotalOrders = document.getElementById("stat-total-orders");
+const statPendingOrders = document.getElementById("stat-pending-orders");
+const statFulfilledOrders = document.getElementById("stat-fulfilled-orders");
+const statTotalRevenue = document.getElementById("stat-total-revenue");
 
-// A generic placeholder image for products that don't have one in the DB.
-// If you add an "image_url" column to the products table it will be used
-// automatically instead.
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?q=80&w=400&auto=format&fit=crop";
+const liveDot = document.getElementById("live-dot");
+const liveText = document.getElementById("live-text");
+const siteLiveToggle = document.getElementById("site-live-toggle");
+const liveDot2 = document.getElementById("live-dot-2");
+const liveText2 = document.getElementById("live-text-2");
+const siteLiveToggle2 = document.getElementById("site-live-toggle-2");
 
-// ============================================================================
-// IMPORTANT FIXES IN THIS VERSION
-// ----------------------------------------------------------------------------
-// 1) SCREEN SWITCHING BUG (the reported issue)
-//    The login card and the shop page were both visible at once. This was a
-//    CSS specificity bug, not a JS bug: #login-screen / #shop-screen set
-//    `display:flex` on an ID selector, which beat the generic
-//    `.screen[hidden] { display:none }` rule. So toggling the `hidden`
-//    attribute here in JS never actually hid anything. Fixed in store.css
-//    with `#id[hidden] { display: none !important; }` for every screen.
-//
-// 2) ADMIN LOGIN
-//    "Admin Login" previously navigated straight to another page. It now
-//    shows an in-app Admin Login screen (same card styling as the customer
-//    login) with Username + Password. On submit it does a lightweight
-//    client-side check and then hands off to the real admin console at
-//    ADMIN_CONSOLE_URL. Wire the TODO below up to your real auth (Firebase
-//    Auth / Supabase Auth) when ready.
-//
-// Firebase/Supabase are initialised separately, inside try/catch, using a
-// dynamic import() for Firebase, so a slow/blocked CDN never blocks login,
-// browsing, or the cart — you just see a small banner instead.
-// ============================================================================
+const ordersCountTitle = document.getElementById("orders-count-title");
+const ordersTableBody = document.getElementById("orders-table-body");
+
+const productForm = document.getElementById("product-form");
+const pIdField = document.getElementById("p-id");
+const pName = document.getElementById("p-name");
+const pCategory = document.getElementById("p-category");
+const pPrice = document.getElementById("p-price");
+const pStock = document.getElementById("p-stock");
+const pImage = document.getElementById("p-image");
+const productSubmitBtn = document.getElementById("product-submit-btn");
+const productCancelBtn = document.getElementById("product-cancel-btn");
+const productFormError = document.getElementById("product-form-error");
+const productsTableBody = document.getElementById("products-table-body");
+
+const connectPrinterBtn = document.getElementById("connect-printer-btn");
 
 // ============================================================================
-// Local "customer session" — name + phone, stored on this device.
+// Backend handles — every function checks for null first, so a slow/failed
+// backend never blocks the tabs, forms, or toggles from rendering.
 // ============================================================================
-const SESSION_KEY = "rmg_customer_session";
-const CART_KEY = "rmg_cart";
-
-function getSession() {
-  try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
-  } catch {
-    return null;
-  }
-}
-function setSession(session) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-}
-function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
-}
-
-function getCart() {
-  try {
-    return JSON.parse(localStorage.getItem(CART_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-function setCart(cart) {
-  localStorage.setItem(CART_KEY, JSON.stringify(cart));
-}
-
-// ============================================================================
-// Element refs
-// ============================================================================
-const loginScreen = document.getElementById("login-screen");
-const adminLoginScreen = document.getElementById("admin-login-screen");
-const shopScreen = document.getElementById("shop-screen");
-
-const loginForm = document.getElementById("login-form");
-const loginError = document.getElementById("login-error");
-const adminLoginLink = document.getElementById("admin-login-link");
-
-const adminLoginForm = document.getElementById("admin-login-form");
-const adminLoginError = document.getElementById("admin-login-error");
-const backToCustomerLink = document.getElementById("back-to-customer-link");
-
-const backendWarning = document.getElementById("backend-warning");
-
-const userChip = document.getElementById("user-chip");
-const logoutBtn = document.getElementById("logout-btn");
-
-const searchInput = document.getElementById("search-input");
-const itemCountPill = document.getElementById("item-count-pill");
-const productGrid = document.getElementById("product-grid");
-
-const cartCountEl = document.getElementById("cart-count");
-const openCartBtn = document.getElementById("open-cart-btn");
-const closeCartBtn = document.getElementById("close-cart-btn");
-const cartBackdrop = document.getElementById("cart-backdrop");
-const cartDrawer = document.getElementById("cart-drawer");
-const cartBody = document.getElementById("cart-body");
-const cartTotalEl = document.getElementById("cart-total");
-const checkoutBtn = document.getElementById("checkout-btn");
-
-const navOrdersBtn = document.getElementById("nav-orders");
-const closeOrdersBtn = document.getElementById("close-orders-btn");
-const ordersBackdrop = document.getElementById("orders-backdrop");
-const ordersDrawer = document.getElementById("orders-drawer");
-const ordersBody = document.getElementById("orders-body");
-
-let allProducts = [];
-
-// Backend handles — filled in by initBackend() if it succeeds. Every
-// function that uses them checks for null first, so a failed/slow backend
-// never blocks login, browsing the (empty) grid, or the cart drawer.
 let db = null;
 let supabaseClient = null;
-let firebaseFns = null; // { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp }
+let firebaseFns = null; // { collection, doc, addDoc, updateDoc, onSnapshot, query, orderBy, setDoc, getDoc }
+
+let latestOrders = [];
+let latestProducts = [];
+let productsChannel = null;
+let printerPort = null; // Web Serial port, once connected
 
 function showBackendWarning(message) {
   if (!backendWarning) return;
   backendWarning.textContent = message;
   backendWarning.hidden = false;
 }
-
-// ============================================================================
-// Screen helper — makes sure exactly one top-level screen is visible.
-// ============================================================================
-function showScreen(name) {
-  loginScreen.hidden = name !== "login";
-  adminLoginScreen.hidden = name !== "admin-login";
-  shopScreen.hidden = name !== "shop";
+function clearBackendWarning() {
+  if (!backendWarning) return;
+  backendWarning.hidden = true;
+}
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
 }
 
 // ============================================================================
-// Boot — login/shop toggle + cart wiring first, no backend dependency.
+// Tabs
 // ============================================================================
-adminLoginLink.addEventListener("click", () => {
-  adminLoginError.hidden = true;
-  adminLoginForm.reset();
-  showScreen("admin-login");
+tabsNav.addEventListener("click", (e) => {
+  const btn = e.target.closest(".admin-tab");
+  if (!btn) return;
+  const tab = btn.dataset.tab;
+
+  tabsNav.querySelectorAll(".admin-tab").forEach((b) => b.classList.toggle("active", b === btn));
+  Object.entries(panels).forEach(([name, panel]) => {
+    panel.hidden = name !== tab;
+  });
 });
 
-backToCustomerLink.addEventListener("click", () => {
-  loginError.hidden = true;
-  showScreen("login");
-});
-
-const existingSession = getSession();
-if (existingSession) {
-  enterShop(existingSession);
-} else {
-  showScreen("login");
-}
-
-loginForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  loginError.hidden = true;
-
-  const name = document.getElementById("c-name").value.trim();
-  const phoneDigits = document.getElementById("c-phone").value.trim();
-
-  if (!name) {
-    loginError.textContent = "Please enter your name.";
-    loginError.hidden = false;
-    return;
-  }
-
-  if (!/^[0-9]{10}$/.test(phoneDigits)) {
-    loginError.textContent = "Enter a valid 10-digit mobile number.";
-    loginError.hidden = false;
-    return;
-  }
-
-  const session = { name, phone: `+91${phoneDigits}` };
-  setSession(session);
-  enterShop(session); // <-- this is the redirect: hides login, shows the shop
-});
-
-function enterShop(session) {
-  showScreen("shop");
-  userChip.textContent = session.name || session.phone;
-  renderCartFromStorage();
-  loadProducts(); // safe no-op / friendly error if backend isn't ready
-}
-
+// ============================================================================
+// Logout
+// ============================================================================
 logoutBtn.addEventListener("click", () => {
-  clearSession();
-  loginForm.reset();
-  showScreen("login");
+  if (ordersUnsubscribe) ordersUnsubscribe();
+  if (settingsUnsubscribe) settingsUnsubscribe();
+  if (productsChannel) supabaseClient?.removeChannel(productsChannel);
+  window.location.href = STORE_URL;
 });
 
 // ============================================================================
-// Admin login (client-side gate — swap the TODO for real Firebase/Supabase
-// auth when you're ready; this just controls hand-off to the admin console).
-// ============================================================================
-adminLoginForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  adminLoginError.hidden = true;
-
-  const username = document.getElementById("a-username").value.trim();
-  const password = document.getElementById("a-password").value;
-
-  if (!username || !password) {
-    adminLoginError.textContent = "Enter both username and password.";
-    adminLoginError.hidden = false;
-    return;
-  }
-
-  // TODO: replace with real authentication (e.g. Firebase Auth
-  // signInWithEmailAndPassword, or a Supabase Auth call) before going live.
-  window.location.href = ADMIN_CONSOLE_URL;
-});
-
-// ============================================================================
-// Backend init (Firebase + Supabase) — isolated so a failure here can never
-// stop the store screen from opening.
+// Backend init
 // ============================================================================
 async function initBackend() {
-  // Supabase client (loaded as a classic <script> before this module, so
-  // window.supabase should already exist — but guard it anyway).
   try {
-    if (!window.supabase) {
-      throw new Error("Supabase library did not load.");
-    }
+    if (!window.supabase) throw new Error("Supabase library did not load.");
     supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (err) {
     console.error("Supabase init failed:", err);
     supabaseClient = null;
   }
 
-  // Firebase, via dynamic import so a network/CDN failure can't take down
-  // the rest of the script.
   try {
     const [{ initializeApp }, firestoreMod] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
@@ -838,12 +143,14 @@ async function initBackend() {
     db = firestoreMod.getFirestore(firebaseApp);
     firebaseFns = {
       collection: firestoreMod.collection,
+      doc: firestoreMod.doc,
       addDoc: firestoreMod.addDoc,
+      updateDoc: firestoreMod.updateDoc,
+      setDoc: firestoreMod.setDoc,
+      getDoc: firestoreMod.getDoc,
       onSnapshot: firestoreMod.onSnapshot,
       query: firestoreMod.query,
-      where: firestoreMod.where,
       orderBy: firestoreMod.orderBy,
-      serverTimestamp: firestoreMod.serverTimestamp,
     };
   } catch (err) {
     console.error("Firebase init failed:", err);
@@ -851,325 +158,341 @@ async function initBackend() {
     firebaseFns = null;
   }
 
-  if (!supabaseClient) {
+  if (!supabaseClient && !db) {
+    showBackendWarning("Store backend is unavailable right now — orders and products won't update.");
+  } else if (!supabaseClient) {
     showBackendWarning("Product catalog is temporarily unavailable — please refresh in a moment.");
   } else if (!db) {
-    showBackendWarning("Orders are temporarily unavailable — you can still browse products.");
+    showBackendWarning("Orders are temporarily unavailable — you can still manage products.");
+  } else {
+    clearBackendWarning();
   }
 
-  // Products depend on Supabase only, so try loading them once the client
-  // is ready even if this resolves after the shop screen is already open.
-  if (supabaseClient && !shopScreen.hidden) {
-    loadProducts();
+  if (db && firebaseFns) {
+    listenToOrders();
+    listenToSiteLive();
+  }
+  if (supabaseClient) {
+    listenToProducts();
   }
 }
-
 initBackend();
 
 // ============================================================================
-// Products (Supabase, public read)
+// ORDERS — real-time via Firestore onSnapshot
 // ============================================================================
-async function loadProducts() {
-  if (!supabaseClient) {
-    productGrid.innerHTML = `<p class="empty-state">Products will appear here once the store connects — try refreshing shortly.</p>`;
-    itemCountPill.textContent = "0 items";
-    return;
-  }
-
-  productGrid.innerHTML = `<p class="loading-state">Loading products…</p>`;
-  const { data, error } = await supabaseClient
-    .from("products")
-    .select("*")
-    .order("name", { ascending: true });
-
-  if (error) {
-    productGrid.innerHTML = `<p class="empty-state">Couldn't load products: ${escapeHtml(error.message)}</p>`;
-    return;
-  }
-  allProducts = data || [];
-  renderGrid(allProducts);
-}
-
-searchInput.addEventListener("input", () => {
-  const term = searchInput.value.trim().toLowerCase();
-  const filtered = term
-    ? allProducts.filter(
-        (p) =>
-          (p.name || "").toLowerCase().includes(term) ||
-          (p.category || "").toLowerCase().includes(term)
-      )
-    : allProducts;
-  renderGrid(filtered);
-});
-
-function renderGrid(products) {
-  itemCountPill.textContent = `${products.length} item${products.length === 1 ? "" : "s"}`;
-
-  if (products.length === 0) {
-    productGrid.innerHTML = `<p class="empty-state">No products match your search.</p>`;
-    return;
-  }
-
-  const cart = getCart();
-
-  productGrid.innerHTML = products
-    .map((p) => {
-      const qty = cart[p.id]?.qty || 0;
-      const outOfStock = Number(p.stock) <= 0;
-      const img = p.image_url || FALLBACK_IMAGE;
-      return `
-        <div class="product-card" data-id="${p.id}">
-          <div class="product-media">
-            <img src="${img}" alt="${escapeHtml(p.name)}" loading="lazy" />
-            <span class="price-badge">₹${Number(p.price).toFixed(0)} / unit</span>
-          </div>
-          <div class="product-body">
-            ${p.category ? `<p class="product-cat">${escapeHtml(p.category)}</p>` : ""}
-            <h3>${escapeHtml(p.name)}</h3>
-            <p class="product-unit">${outOfStock ? "Out of stock" : `${p.stock} in stock`}</p>
-            <div class="qty-slot">
-              ${
-                qty > 0
-                  ? `<div class="stepper">
-                       <button type="button" class="dec-btn">−</button>
-                       <span>${qty}</span>
-                       <button type="button" class="inc-btn" ${qty >= p.stock ? "disabled" : ""}>+</button>
-                     </div>`
-                  : `<button type="button" class="add-btn" ${outOfStock ? "disabled" : ""}>${outOfStock ? "Unavailable" : "Add to Cart"}</button>`
-              }
-            </div>
-          </div>
-        </div>`;
-    })
-    .join("");
-
-  productGrid.querySelectorAll(".add-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, 1);
-    });
-  });
-  productGrid.querySelectorAll(".inc-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, 1);
-    });
-  });
-  productGrid.querySelectorAll(".dec-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, -1);
-    });
-  });
-}
-
-function changeQty(productId, delta) {
-  const product = allProducts.find((p) => p.id === productId);
-  if (!product) return;
-
-  const cart = getCart();
-  const current = cart[productId]?.qty || 0;
-  const next = Math.max(0, Math.min(product.stock, current + delta));
-
-  if (next === 0) {
-    delete cart[productId];
-  } else {
-    cart[productId] = {
-      qty: next,
-      name: product.name,
-      price: product.price,
-      image_url: product.image_url || FALLBACK_IMAGE,
-    };
-  }
-  setCart(cart);
-  renderGrid(searchInput.value.trim() ? filteredByCurrentSearch() : allProducts);
-  renderCartFromStorage();
-}
-
-function filteredByCurrentSearch() {
-  const term = searchInput.value.trim().toLowerCase();
-  return allProducts.filter(
-    (p) => (p.name || "").toLowerCase().includes(term) || (p.category || "").toLowerCase().includes(term)
-  );
-}
-
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str ?? "";
-  return div.innerHTML;
-}
-
-// ============================================================================
-// Cart drawer (fully local — works regardless of backend state)
-// ============================================================================
-function renderCartFromStorage() {
-  const cart = getCart();
-  const entries = Object.entries(cart);
-  const totalQty = entries.reduce((sum, [, item]) => sum + item.qty, 0);
-  const totalPrice = entries.reduce((sum, [, item]) => sum + item.qty * item.price, 0);
-
-  cartCountEl.textContent = totalQty;
-  cartTotalEl.textContent = `₹${totalPrice.toFixed(2)}`;
-  checkoutBtn.disabled = totalQty === 0;
-
-  if (entries.length === 0) {
-    cartBody.innerHTML = `<p class="loading-state">Your cart is empty.</p>`;
-    return;
-  }
-
-  cartBody.innerHTML = entries
-    .map(
-      ([id, item]) => `
-        <div class="cart-line" data-id="${id}">
-          <img src="${item.image_url}" alt="${escapeHtml(item.name)}" />
-          <div class="cart-line-info">
-            <h4>${escapeHtml(item.name)}</h4>
-            <span>₹${Number(item.price).toFixed(2)} each</span><br/>
-            <button type="button" class="remove-btn">Remove</button>
-          </div>
-          <div class="stepper">
-            <button type="button" class="dec-btn">−</button>
-            <span>${item.qty}</span>
-            <button type="button" class="inc-btn">+</button>
-          </div>
-        </div>`
-    )
-    .join("");
-
-  cartBody.querySelectorAll(".inc-btn").forEach((btn) => {
-    btn.addEventListener("click", () => changeQty(btn.closest(".cart-line").dataset.id, 1));
-  });
-  cartBody.querySelectorAll(".dec-btn").forEach((btn) => {
-    btn.addEventListener("click", () => changeQty(btn.closest(".cart-line").dataset.id, -1));
-  });
-  cartBody.querySelectorAll(".remove-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const cart = getCart();
-      delete cart[btn.closest(".cart-line").dataset.id];
-      setCart(cart);
-      renderCartFromStorage();
-      renderGrid(searchInput.value.trim() ? filteredByCurrentSearch() : allProducts);
-    });
-  });
-}
-
-openCartBtn.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, true));
-closeCartBtn.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
-cartBackdrop.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
-
-function toggleDrawer(drawer, backdrop, show) {
-  drawer.hidden = !show;
-  backdrop.hidden = !show;
-}
-
-checkoutBtn.addEventListener("click", async () => {
-  const session = getSession();
-  const cart = getCart();
-  const entries = Object.entries(cart);
-  if (!session || entries.length === 0) return;
-
-  if (!db || !firebaseFns) {
-    alert("Orders aren't connected yet — please try again in a moment.");
-    return;
-  }
-
-  checkoutBtn.disabled = true;
-  checkoutBtn.textContent = "Placing order…";
-
-  const items = entries.map(([id, item]) => ({
-    productId: id,
-    name: item.name,
-    qty: item.qty,
-    price: item.price,
-  }));
-  const total = items.reduce((sum, i) => sum + i.qty * i.price, 0);
-
-  try {
-    await firebaseFns.addDoc(firebaseFns.collection(db, "orders"), {
-      customerName: session.name,
-      customerPhone: session.phone,
-      items,
-      total,
-      status: "pending",
-      createdAt: firebaseFns.serverTimestamp(),
-    });
-    setCart({});
-    renderCartFromStorage();
-    renderGrid(allProducts);
-    toggleDrawer(cartDrawer, cartBackdrop, false);
-    alert("Order placed! You can track it under Previous Orders.");
-  } catch (err) {
-    alert("Couldn't place order: " + err.message);
-  } finally {
-    checkoutBtn.disabled = false;
-    checkoutBtn.textContent = "Place Order";
-  }
-});
-
-// ============================================================================
-// Previous orders (Firestore, filtered to this customer's phone number)
-// ============================================================================
-navOrdersBtn.addEventListener("click", () => {
-  toggleDrawer(ordersDrawer, ordersBackdrop, true);
-  loadOrders();
-});
-closeOrdersBtn.addEventListener("click", () => toggleDrawer(ordersDrawer, ordersBackdrop, false));
-ordersBackdrop.addEventListener("click", () => toggleDrawer(ordersDrawer, ordersBackdrop, false));
-
 let ordersUnsubscribe = null;
 
-function loadOrders() {
-  const session = getSession();
-  if (!session) return;
-
-  if (!db || !firebaseFns) {
-    ordersBody.innerHTML = `<p class="empty-state">Orders aren't connected yet — please try again in a moment.</p>`;
-    return;
-  }
-
-  ordersBody.innerHTML = `<p class="loading-state">Loading your orders…</p>`;
-
-  if (ordersUnsubscribe) ordersUnsubscribe();
-
+function listenToOrders() {
   const ordersQuery = firebaseFns.query(
     firebaseFns.collection(db, "orders"),
-    firebaseFns.where("customerPhone", "==", session.phone),
     firebaseFns.orderBy("createdAt", "desc")
   );
 
   ordersUnsubscribe = firebaseFns.onSnapshot(
     ordersQuery,
     (snapshot) => {
-      const orders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-      renderOrders(orders);
+      latestOrders = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderStats(latestOrders);
+      renderOrdersTable(latestOrders);
     },
     (err) => {
-      ordersBody.innerHTML = `<p class="empty-state">Couldn't load orders: ${escapeHtml(err.message)}</p>`;
+      ordersTableBody.innerHTML = `<tr><td colspan="8" class="admin-empty">Couldn't load orders: ${escapeHtml(err.message)}</td></tr>`;
     }
   );
 }
 
-function renderOrders(orders) {
+function renderStats(orders) {
+  const total = orders.length;
+  const pending = orders.filter((o) => (o.status || "pending") === "pending").length;
+  const fulfilled = orders.filter((o) => ["fulfilled", "delivered"].includes(o.status)).length;
+  const revenue = orders
+    .filter((o) => ["fulfilled", "delivered"].includes(o.status))
+    .reduce((sum, o) => sum + Number(o.total || 0), 0);
+
+  statTotalOrders.textContent = total;
+  statPendingOrders.textContent = pending;
+  statFulfilledOrders.textContent = fulfilled;
+  statTotalRevenue.textContent = `₹${revenue.toFixed(2)}`;
+}
+
+function renderOrdersTable(orders) {
+  ordersCountTitle.textContent = `All recent orders (${orders.length} total)`;
+
   if (orders.length === 0) {
-    ordersBody.innerHTML = `<p class="loading-state">No orders yet — go place your first one!</p>`;
+    ordersTableBody.innerHTML = `<tr><td colspan="8" class="admin-empty">No orders yet.</td></tr>`;
     return;
   }
-  ordersBody.innerHTML = orders
+
+  ordersTableBody.innerHTML = orders
     .map((o) => {
-      const itemsSummary = Array.isArray(o.items)
-        ? o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")
-        : "—";
-      const placed = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "Just now";
+      const shortId = o.id.slice(0, 8);
+      const when = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "Just now";
+      const itemsSummary = Array.isArray(o.items) ? o.items.map((i) => `${i.name} ×${i.qty}`).join(", ") : "—";
       const status = o.status || "pending";
+
       return `
-        <div class="order-card">
-          <div class="order-card-head">
-            <strong>₹${Number(o.total || 0).toFixed(2)}</strong>
-            <span class="status-pill ${status}">${status}</span>
-          </div>
-          <p class="order-items">${escapeHtml(itemsSummary)}</p>
-          <p class="order-meta">${placed}</p>
-        </div>`;
+        <tr data-id="${o.id}">
+          <td>${shortId}</td>
+          <td>${when}</td>
+          <td>${escapeHtml(o.customerName || "—")}</td>
+          <td>${escapeHtml(o.customerPhone || "—")}</td>
+          <td>${escapeHtml(itemsSummary)}</td>
+          <td>₹${Number(o.total || 0).toFixed(2)}</td>
+          <td><span class="status-pill ${status}">${status}</span></td>
+          <td>${orderActionsHtml(status)}</td>
+        </tr>`;
     })
     .join("");
+
+  ordersTableBody.querySelectorAll("[data-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest("tr");
+      updateOrderStatus(row.dataset.id, btn.dataset.action);
+    });
+  });
+}
+
+function orderActionsHtml(status) {
+  if (status === "pending") {
+    return `
+      <button type="button" class="btn btn-primary" data-action="accepted" style="padding:8px 14px;font-size:13px;">Accept</button>
+      <button type="button" class="btn btn-ghost" data-action="cancelled" style="padding:8px 14px;font-size:13px;">Cancel</button>`;
+  }
+  if (status === "accepted") {
+    return `
+      <button type="button" class="btn btn-primary" data-action="fulfilled" style="padding:8px 14px;font-size:13px;">Mark Fulfilled</button>
+      <button type="button" class="btn btn-ghost" data-action="cancelled" style="padding:8px 14px;font-size:13px;">Cancel</button>`;
+  }
+  return "";
+}
+
+async function updateOrderStatus(orderId, status) {
+  if (!db || !firebaseFns) return;
+  try {
+    await firebaseFns.updateDoc(firebaseFns.doc(db, "orders", orderId), { status });
+  } catch (err) {
+    alert("Couldn't update order: " + err.message);
+  }
+}
+
+// ============================================================================
+// SITE LIVE TOGGLE — Firestore doc, synced in real time to BOTH switches
+// (Orders tab + Settings tab) and to every admin session that has this open.
+// ============================================================================
+let settingsUnsubscribe = null;
+let applyingRemoteToggle = false;
+
+function listenToSiteLive() {
+  const settingsRef = firebaseFns.doc(db, ...SETTINGS_DOC_PATH);
+
+  settingsUnsubscribe = firebaseFns.onSnapshot(
+    settingsRef,
+    (snap) => {
+      const live = snap.exists() ? snap.data().live !== false : true;
+      applyingRemoteToggle = true;
+      setToggleUI(live);
+      applyingRemoteToggle = false;
+    },
+    (err) => console.error("Settings listener failed:", err)
+  );
+}
+
+function setToggleUI(live) {
+  siteLiveToggle.checked = live;
+  siteLiveToggle2.checked = live;
+  [liveDot, liveDot2].forEach((dot) => (dot.style.background = live ? "#27c94b" : "#d32f2f"));
+  liveText.textContent = live ? "Site LIVE" : "Site CLOSED";
+  liveText2.textContent = live ? "Site LIVE" : "Site CLOSED";
+}
+
+async function writeSiteLive(live) {
+  if (!db || !firebaseFns) return;
+  try {
+    await firebaseFns.setDoc(firebaseFns.doc(db, ...SETTINGS_DOC_PATH), { live }, { merge: true });
+  } catch (err) {
+    alert("Couldn't update site status: " + err.message);
+  }
+}
+
+[siteLiveToggle, siteLiveToggle2].forEach((toggle) => {
+  toggle.addEventListener("change", () => {
+    if (applyingRemoteToggle) return;
+    writeSiteLive(toggle.checked);
+  });
+});
+
+// ============================================================================
+// PRODUCTS — Supabase, real-time via postgres_changes channel
+// (Enable Realtime replication on the "products" table in the Supabase
+// dashboard if changes aren't syncing live.)
+// ============================================================================
+function listenToProducts() {
+  loadProducts();
+
+  productsChannel = supabaseClient
+    .channel("products-admin-changes")
+    .on("postgres_changes", { event: "*", schema: "public", table: "products" }, () => {
+      loadProducts();
+    })
+    .subscribe();
+}
+
+async function loadProducts() {
+  const { data, error } = await supabaseClient.from("products").select("*").order("name", { ascending: true });
+  if (error) {
+    productsTableBody.innerHTML = `<tr><td colspan="5" class="admin-empty">Couldn't load products: ${escapeHtml(error.message)}</td></tr>`;
+    return;
+  }
+  latestProducts = data || [];
+  renderProductsTable(latestProducts);
+}
+
+function renderProductsTable(products) {
+  if (products.length === 0) {
+    productsTableBody.innerHTML = `<tr><td colspan="5" class="admin-empty">No products yet — add one above.</td></tr>`;
+    return;
+  }
+
+  productsTableBody.innerHTML = products
+    .map(
+      (p) => `
+        <tr data-id="${p.id}">
+          <td>${escapeHtml(p.name)}</td>
+          <td>${escapeHtml(p.category || "—")}</td>
+          <td>₹${Number(p.price).toFixed(2)}</td>
+          <td>${p.stock}</td>
+          <td>
+            <button type="button" class="btn btn-ghost" data-action="edit" style="padding:8px 14px;font-size:13px;">Edit</button>
+            <button type="button" class="btn btn-ghost" data-action="delete" style="padding:8px 14px;font-size:13px;">Delete</button>
+          </td>
+        </tr>`
+    )
+    .join("");
+
+  productsTableBody.querySelectorAll('[data-action="edit"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.closest("tr").dataset.id;
+      const product = latestProducts.find((p) => String(p.id) === String(id));
+      if (product) startEditProduct(product);
+    });
+  });
+  productsTableBody.querySelectorAll('[data-action="delete"]').forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.closest("tr").dataset.id;
+      if (confirm("Delete this product?")) deleteProduct(id);
+    });
+  });
+}
+
+function startEditProduct(product) {
+  pIdField.value = product.id;
+  pName.value = product.name || "";
+  pCategory.value = product.category || "";
+  pPrice.value = product.price ?? "";
+  pStock.value = product.stock ?? "";
+  pImage.value = product.image_url || "";
+  productSubmitBtn.textContent = "Update Product";
+  productCancelBtn.hidden = false;
+  productForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function resetProductForm() {
+  productForm.reset();
+  pIdField.value = "";
+  productSubmitBtn.textContent = "Add Product";
+  productCancelBtn.hidden = true;
+  productFormError.hidden = true;
+}
+
+productCancelBtn.addEventListener("click", resetProductForm);
+
+productForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  productFormError.hidden = true;
+
+  if (!supabaseClient) {
+    productFormError.textContent = "Product catalog is unavailable right now.";
+    productFormError.hidden = false;
+    return;
+  }
+
+  const payload = {
+    name: pName.value.trim(),
+    category: pCategory.value.trim() || null,
+    price: Number(pPrice.value),
+    stock: Number(pStock.value),
+    image_url: pImage.value.trim() || null,
+  };
+
+  if (!payload.name || Number.isNaN(payload.price) || Number.isNaN(payload.stock)) {
+    productFormError.textContent = "Please fill in name, price, and stock correctly.";
+    productFormError.hidden = false;
+    return;
+  }
+
+  productSubmitBtn.disabled = true;
+  try {
+    const editingId = pIdField.value;
+    const { error } = editingId
+      ? await supabaseClient.from("products").update(payload).eq("id", editingId)
+      : await supabaseClient.from("products").insert(payload);
+
+    if (error) throw error;
+    resetProductForm();
+    loadProducts();
+  } catch (err) {
+    productFormError.textContent = "Couldn't save product: " + err.message;
+    productFormError.hidden = false;
+  } finally {
+    productSubmitBtn.disabled = false;
+  }
+});
+
+async function deleteProduct(id) {
+  const { error } = await supabaseClient.from("products").delete().eq("id", id);
+  if (error) alert("Couldn't delete product: " + error.message);
+  else loadProducts();
+}
+
+// ============================================================================
+// CONNECT PRINTER — Web Serial API (Chrome/Edge only) for USB thermal
+// receipt printers. This wires up the connection only; add your printer's
+// ESC/POS byte commands in printReceipt() once you know the exact model.
+// ============================================================================
+connectPrinterBtn.addEventListener("click", async () => {
+  if (!("serial" in navigator)) {
+    alert("This browser doesn't support connecting to a printer directly (try Chrome or Edge on desktop).");
+    return;
+  }
+  try {
+    printerPort = await navigator.serial.requestPort();
+    await printerPort.open({ baudRate: 9600 });
+    connectPrinterBtn.textContent = "🖶 Printer Connected";
+    connectPrinterBtn.disabled = true;
+  } catch (err) {
+    if (err.name !== "NotFoundError") {
+      alert("Couldn't connect to printer: " + err.message);
+    }
+  }
+});
+
+// Example helper for later use once ESC/POS commands are defined — not wired
+// to any button yet.
+async function printReceipt(order) {
+  if (!printerPort) {
+    alert("Connect a printer first.");
+    return;
+  }
+  const writer = printerPort.writable.getWriter();
+  const encoder = new TextEncoder();
+  const lines = [
+    `Rajeshwari Medical & General Stores\n`,
+    `Order ${order.id.slice(0, 8)}\n`,
+    `Customer: ${order.customerName}\n`,
+    ...(order.items || []).map((i) => `${i.name} x${i.qty}  ₹${(i.qty * i.price).toFixed(2)}\n`),
+    `Total: ₹${Number(order.total || 0).toFixed(2)}\n\n\n`,
+  ];
+  await writer.write(encoder.encode(lines.join("")));
+  writer.releaseLock();
 }
