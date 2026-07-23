@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin Login — Rajeshwari Medical & General Stores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="customer.css" />
+</head>
+<body>
+
+<section class="auth-screen">
+  <div class="auth-card">
+    <div class="brand-mark">℞</div>
+    <h1>Admin Login</h1>
+    <p class="auth-sub">Sign in to manage products and orders</p>
+
+    <form id="admin-login-form" novalidate>
+      <div class="field">
+        <label for="admin-username">Username</label>
+        <div class="input-wrap">
+          <span class="icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="currentColor" stroke-width="2"/><path d="M4 20c1.6-3.6 4.8-6 8-6s6.4 2.4 8 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </span>
+          <input type="text" id="admin-username" placeholder="Username" autocomplete="username" required />
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="admin-password">Password</label>
+        <div class="input-wrap">
+          <span class="icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="2"/></svg>
+          </span>
+          <input type="password" id="admin-password" placeholder="••••••••" autocomplete="current-password" required />
+        </div>
+      </div>
+
+      <p id="admin-login-error" class="error-text" hidden></p>
+
+      <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+    </form>
+
+    <div class="auth-link-row">
+      <a class="auth-link" href="login.html">Back to customer sign in</a>
+    </div>
+  </div>
+</section>
+
+<script src="customer.js"></script>
+<script>
+  const form = document.getElementById("admin-login-form");
+  const errorEl = document.getElementById("admin-login-error");
+
+  // Already signed in this tab/session? Skip straight to the dashboard.
+  if (hasAdminSession()) {
+    window.location.href = "index.html";
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    errorEl.hidden = true;
+
+    const username = document.getElementById("admin-username").value.trim();
+    const password = document.getElementById("admin-password").value;
+
+    if (checkAdminCredentials(username, password)) {
+      setAdminSession();
+      window.location.href = "index.html";
+    } else {
+      errorEl.textContent = "Incorrect username or password.";
+      errorEl.hidden = false;
+    }
+  });
+</script>
+</body>
+</html>
