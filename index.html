@@ -110,18 +110,75 @@
   <div class="drawer-backdrop" id="cart-backdrop" hidden></div>
   <aside class="drawer" id="cart-drawer" hidden aria-label="Cart">
     <div class="drawer-head">
-      <h2>Your Cart</h2>
+      <h2 id="cart-drawer-title">Your Cart</h2>
       <button type="button" class="close-btn" id="close-cart-btn">✕</button>
     </div>
-    <div class="drawer-body" id="cart-body">
-      <p class="loading-state">Your cart is empty.</p>
-    </div>
-    <div class="drawer-foot">
-      <div class="total-row">
-        <span>Total</span>
-        <span id="cart-total">₹0.00</span>
+
+    <!-- STEP 1: CART -->
+    <div id="cart-view">
+      <div class="drawer-body" id="cart-body">
+        <p class="loading-state">Your cart is empty.</p>
       </div>
-      <button type="button" class="btn btn-primary btn-block" id="checkout-btn">Place Order</button>
+      <div class="drawer-foot">
+        <div class="total-row">
+          <span>Total</span>
+          <span id="cart-total">₹0.00</span>
+        </div>
+        <button type="button" class="btn btn-primary btn-block" id="checkout-btn">Proceed to Checkout</button>
+      </div>
+    </div>
+
+    <!-- STEP 2: DELIVERY DETAILS / CHECKOUT -->
+    <div id="checkout-view" hidden>
+      <div class="drawer-body">
+        <form id="delivery-form" novalidate>
+          <h3 class="section-title">🚚 Delivery Details</h3>
+
+          <label for="d-community">Your Community</label>
+          <input type="text" id="d-community" class="text-field" required placeholder="Select your community" />
+
+          <label for="d-block">Your Block</label>
+          <input type="text" id="d-block" class="text-field" required placeholder="Choose community first" />
+
+          <label for="d-flat">Flat / House Number</label>
+          <input type="text" id="d-flat" class="text-field" required placeholder="e.g. 101, A-12" />
+
+          <label for="d-alt-phone">Alt Mobile (optional)</label>
+          <div class="phone-field">
+            <span class="phone-code">+91</span>
+            <input type="tel" id="d-alt-phone" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" placeholder="10-digit mobile (optional)" />
+          </div>
+
+          <label for="d-note">Packing Note (optional)</label>
+          <textarea id="d-note" class="text-field" rows="2" placeholder="Any special packing instructions"></textarea>
+
+          <p id="delivery-error" class="error-text" hidden></p>
+        </form>
+
+        <div class="order-summary-box">
+          <h3 class="section-title">Order Summary</h3>
+          <div id="checkout-summary-lines"></div>
+          <div class="total-row"><span>Delivery</span><span class="free-tag">Free</span></div>
+          <div class="total-row grand"><span>Total</span><span id="checkout-total">₹0.00</span></div>
+        </div>
+      </div>
+      <div class="drawer-foot">
+        <button type="button" class="btn btn-ghost btn-block" id="back-to-cart-btn">← Back to Cart</button>
+        <button type="button" class="btn btn-primary btn-block" id="place-order-btn">Place Order</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: CONFIRMATION -->
+    <div id="confirmation-view" hidden>
+      <div class="drawer-body confirmation-body">
+        <p class="confirmation-check">✅</p>
+        <p class="confirmation-order-id">Order ID: <strong id="confirm-order-id">—</strong></p>
+        <p class="confirmation-sub">We'll deliver to your community &amp; block soon.</p>
+      </div>
+      <div class="drawer-foot">
+        <button type="button" class="btn btn-ghost btn-block" id="print-receipt-btn">🖶 Print Receipt</button>
+        <button type="button" class="btn btn-primary btn-block" id="confirm-continue-btn">Continue Shopping</button>
+      </div>
     </div>
   </aside>
 
