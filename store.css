@@ -509,6 +509,28 @@ form label {
   .drawer { max-width: 100%; }
 }
 
+/* Checkout (delivery details) + confirmation views inside the cart drawer */
+#checkout-view .drawer-body,
+#confirmation-view .drawer-body { padding: 20px; }
+.section-title { font-size: 15px; font-weight: 700; margin: 0 0 14px; display: flex; align-items: center; gap: 6px; }
+#delivery-form label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+#delivery-form label:first-of-type { margin-top: 0; }
+#delivery-form textarea.text-field { resize: vertical; font-family: inherit; }
+.order-summary-box {
+  margin-top: 26px; padding-top: 18px; border-top: 1px dashed var(--line);
+}
+.order-summary-box .total-row { font-weight: 500; font-size: 14px; margin-bottom: 8px; }
+.order-summary-box .total-row.grand { font-weight: 700; font-size: 16px; border-top: 1px solid var(--line); padding-top: 10px; margin-top: 4px; }
+.order-summary-box .free-tag { color: var(--green-700); font-weight: 700; }
+#checkout-summary-lines { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 10px; }
+#checkout-summary-lines div { display: flex; justify-content: space-between; margin-bottom: 4px; }
+
+.confirmation-body { text-align: center; padding: 40px 24px; }
+.confirmation-check { font-size: 44px; margin: 0 0 10px; }
+.confirmation-order-id { font-size: 15px; margin: 6px 0; }
+.confirmation-order-id strong { color: var(--green-700); }
+.confirmation-sub { color: var(--ink-soft); font-size: 13.5px; }
+
 :focus-visible { outline: 2px solid var(--green-500); outline-offset: 2px; }
 
 @media (prefers-reduced-motion: reduce) {
