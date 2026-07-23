@@ -113,6 +113,31 @@ const cartBody = document.getElementById("cart-body");
 const cartTotalEl = document.getElementById("cart-total");
 const checkoutBtn = document.getElementById("checkout-btn");
 
+// Cart drawer has three internal views: cart -> checkout (delivery details) -> confirmation
+const cartView = document.getElementById("cart-view");
+const checkoutView = document.getElementById("checkout-view");
+const confirmationView = document.getElementById("confirmation-view");
+const cartDrawerTitle = document.getElementById("cart-drawer-title");
+
+const deliveryForm = document.getElementById("delivery-form");
+const dCommunity = document.getElementById("d-community");
+const dBlock = document.getElementById("d-block");
+const dFlat = document.getElementById("d-flat");
+const dAltPhone = document.getElementById("d-alt-phone");
+const dNote = document.getElementById("d-note");
+const deliveryError = document.getElementById("delivery-error");
+
+const checkoutSummaryLines = document.getElementById("checkout-summary-lines");
+const checkoutTotalEl = document.getElementById("checkout-total");
+const backToCartBtn = document.getElementById("back-to-cart-btn");
+const placeOrderBtn = document.getElementById("place-order-btn");
+
+const confirmOrderIdEl = document.getElementById("confirm-order-id");
+const printReceiptBtn = document.getElementById("print-receipt-btn");
+const confirmContinueBtn = document.getElementById("confirm-continue-btn");
+
+let lastPlacedOrder = null; // populated right after a successful order, used for printing
+
 const navOrdersBtn = document.getElementById("nav-orders");
 const closeOrdersBtn = document.getElementById("close-orders-btn");
 const ordersBackdrop = document.getElementById("orders-backdrop");
@@ -466,7 +491,10 @@ function renderCartFromStorage() {
   });
 }
 
-openCartBtn.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, true));
+openCartBtn.addEventListener("click", () => {
+  showCartStep("cart");
+  toggleDrawer(cartDrawer, cartBackdrop, true);
+});
 closeCartBtn.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
 cartBackdrop.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
 
@@ -475,19 +503,69 @@ function toggleDrawer(drawer, backdrop, show) {
   backdrop.hidden = !show;
 }
 
-checkoutBtn.addEventListener("click", async () => {
+// ============================================================================
+// Cart drawer step switching: cart -> checkout (delivery details) -> confirmation
+// ============================================================================
+function showCartStep(step) {
+  cartView.hidden = step !== "cart";
+  checkoutView.hidden = step !== "checkout";
+  confirmationView.hidden = step !== "confirmation";
+  cartDrawerTitle.textContent =
+    step === "checkout" ? "Checkout" : step === "confirmation" ? "Order Placed" : "Your Cart";
+}
+
+// STEP 1 -> 2: "Proceed to Checkout"
+checkoutBtn.addEventListener("click", () => {
+  const cart = getCart();
+  const entries = Object.entries(cart);
+  if (entries.length === 0) return;
+
+  const total = entries.reduce((sum, [, item]) => sum + item.qty * item.price, 0);
+  checkoutSummaryLines.innerHTML = entries
+    .map(([, item]) => `<div><span>${escapeHtml(item.name)} x ${item.qty}</span><span>₹${(item.qty * item.price).toFixed(2)}</span></div>`)
+    .join("");
+  checkoutTotalEl.textContent = `₹${total.toFixed(2)}`;
+
+  showCartStep("checkout");
+});
+
+// STEP 2 -> 1: "Back to Cart"
+backToCartBtn.addEventListener("click", () => showCartStep("cart"));
+
+// STEP 2 -> 3: "Place Order" (validates delivery details, writes order to Firestore)
+placeOrderBtn.addEventListener("click", async () => {
+  deliveryError.hidden = true;
+
   const session = getSession();
   const cart = getCart();
   const entries = Object.entries(cart);
   if (!session || entries.length === 0) return;
 
-  if (!db || !firebaseFns) {
-    alert("Orders aren't connected yet — please try again in a moment.");
+  const community = dCommunity.value.trim();
+  const block = dBlock.value.trim();
+  const flat = dFlat.value.trim();
+  const altPhoneDigits = dAltPhone.value.trim();
+  const note = dNote.value.trim();
+
+  if (!community || !block || !flat) {
+    deliveryError.textContent = "Please fill in your community, block, and flat/house number.";
+    deliveryError.hidden = false;
+    return;
+  }
+  if (altPhoneDigits && !/^[0-9]{10}$/.test(altPhoneDigits)) {
+    deliveryError.textContent = "Alt mobile must be a valid 10-digit number, or left blank.";
+    deliveryError.hidden = false;
     return;
   }
 
-  checkoutBtn.disabled = true;
-  checkoutBtn.textContent = "Placing order…";
+  if (!db || !firebaseFns) {
+    deliveryError.textContent = "Orders aren't connected yet — please try again in a moment.";
+    deliveryError.hidden = false;
+    return;
+  }
+
+  placeOrderBtn.disabled = true;
+  placeOrderBtn.textContent = "Placing order…";
 
   const items = entries.map(([id, item]) => ({
     productId: id,
@@ -497,27 +575,129 @@ checkoutBtn.addEventListener("click", async () => {
   }));
   const total = items.reduce((sum, i) => sum + i.qty * i.price, 0);
 
+  const deliveryDetails = {
+    community,
+    block,
+    flat,
+    altPhone: altPhoneDigits ? `+91${altPhoneDigits}` : "",
+    note,
+  };
+
   try {
-    await firebaseFns.addDoc(firebaseFns.collection(db, "orders"), {
+    const docRef = await firebaseFns.addDoc(firebaseFns.collection(db, "orders"), {
       customerName: session.name,
       customerPhone: session.phone,
       items,
       total,
+      deliveryDetails,
       status: "pending",
       createdAt: firebaseFns.serverTimestamp(),
     });
+
+    lastPlacedOrder = {
+      id: docRef.id,
+      customerName: session.name,
+      customerPhone: session.phone,
+      items,
+      total,
+      deliveryDetails,
+      placedAt: new Date(),
+    };
+
     setCart({});
     renderCartFromStorage();
     renderGrid(allProducts);
-    toggleDrawer(cartDrawer, cartBackdrop, false);
-    alert("Order placed! You can track it under Previous Orders.");
+    deliveryForm.reset();
+
+    confirmOrderIdEl.textContent = docRef.id.slice(0, 8).toUpperCase();
+    showCartStep("confirmation");
   } catch (err) {
-    alert("Couldn't place order: " + err.message);
+    deliveryError.textContent = "Couldn't place order: " + err.message;
+    deliveryError.hidden = false;
   } finally {
-    checkoutBtn.disabled = false;
-    checkoutBtn.textContent = "Place Order";
+    placeOrderBtn.disabled = false;
+    placeOrderBtn.textContent = "Place Order";
   }
 });
+
+// STEP 3: "Continue Shopping"
+confirmContinueBtn.addEventListener("click", () => {
+  toggleDrawer(cartDrawer, cartBackdrop, false);
+  showCartStep("cart");
+});
+
+// STEP 3: "Print Receipt"
+printReceiptBtn.addEventListener("click", () => {
+  if (!lastPlacedOrder) return;
+  printReceipt(lastPlacedOrder);
+});
+
+// ============================================================================
+// Printable receipt — used from the confirmation screen. Opens a small
+// print-formatted window with the order details and triggers window.print().
+// ============================================================================
+function buildReceiptHTML(order) {
+  const placed = (order.placedAt instanceof Date ? order.placedAt : new Date()).toLocaleString();
+  const shortId = order.id.slice(0, 8).toUpperCase();
+  const d = order.deliveryDetails || {};
+
+  const itemRows = (order.items || [])
+    .map(
+      (i) =>
+        `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Receipt ${shortId}</title>
+<style>
+  body { font-family: 'Courier New', monospace; width: 300px; margin: 20px auto; color: #111; font-size: 13px; }
+  .center { text-align: center; }
+  .logo { font-size: 28px; }
+  h2 { margin: 4px 0; font-size: 16px; }
+  .meta { color: #444; margin: 2px 0; }
+  hr { border: none; border-top: 1px dashed #333; margin: 10px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 3px 0; vertical-align: top; }
+  td.r { text-align: right; }
+  .total-line { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin-top: 6px; }
+  .thanks { margin-top: 14px; }
+</style>
+</head>
+<body>
+  <p class="center logo">℞</p>
+  <h2 class="center">RAJESHWARI MEDICAL</h2>
+  <p class="center meta">&amp; General Stores</p>
+  <p class="center meta">${escapeHtml(placed)}</p>
+  <hr/>
+  <p>Order ID: <strong>${shortId}</strong></p>
+  <p class="meta">Flat: ${escapeHtml(d.flat || "-")} | ${escapeHtml(order.customerPhone || "-")}</p>
+  ${d.altPhone ? `<p class="meta">Alt: ${escapeHtml(d.altPhone)}</p>` : ""}
+  <p class="meta">${escapeHtml(d.community || "-")} / ${escapeHtml(d.block || "-")}</p>
+  ${d.note ? `<p class="meta">Note: ${escapeHtml(d.note)}</p>` : ""}
+  <hr/>
+  <table>${itemRows}</table>
+  <hr/>
+  <div class="total-line"><span>TOTAL</span><span>₹${Number(order.total || 0).toFixed(2)}</span></div>
+  <p class="center thanks">Thank you! Visit again</p>
+</body>
+</html>`;
+}
+
+function printReceipt(order) {
+  const printWindow = window.open("", "_blank", "width=380,height=640");
+  if (!printWindow) {
+    alert("Please allow pop-ups for this site to print the receipt.");
+    return;
+  }
+  printWindow.document.write(buildReceiptHTML(order));
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 300);
+}
 
 // ============================================================================
 // Previous orders (Firestore, filtered to this customer's phone number)
