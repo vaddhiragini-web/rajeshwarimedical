@@ -200,7 +200,10 @@ function renderOrders() {
           <td>${escapeHtml(itemsSummary)}</td>
           <td>₹${Number(o.total || 0).toFixed(2)}</td>
           <td><span class="status-pill ${status}">${status}</span></td>
-          <td><select class="status-select text-field">${options}</select></td>
+          <td>
+            <select class="status-select text-field">${options}</select>
+            <button type="button" class="btn btn-ghost print-order-btn">🖶 Print</button>
+          </td>
         </tr>`;
     })
     .join("");
@@ -218,6 +221,81 @@ function renderOrders() {
       }
     });
   });
+
+  ordersTableBody.querySelectorAll(".print-order-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest("tr");
+      const order = allOrders.find((o) => o.id === row.dataset.id);
+      if (order) printOrderReceipt(order);
+    });
+  });
+}
+
+// ============================================================================
+// Printable receipt for a single order — same layout customers see after
+// checkout, so admin can reprint a copy at the counter/for delivery.
+// ============================================================================
+function buildReceiptHTML(order) {
+  const placed = order.createdAt && order.createdAt.toDate ? order.createdAt.toDate().toLocaleString() : "—";
+  const shortId = order.id.slice(0, 8).toUpperCase();
+  const d = order.deliveryDetails || {};
+
+  const itemRows = (order.items || [])
+    .map(
+      (i) =>
+        `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Receipt ${shortId}</title>
+<style>
+  body { font-family: 'Courier New', monospace; width: 300px; margin: 20px auto; color: #111; font-size: 13px; }
+  .center { text-align: center; }
+  .logo { font-size: 28px; }
+  h2 { margin: 4px 0; font-size: 16px; }
+  .meta { color: #444; margin: 2px 0; }
+  hr { border: none; border-top: 1px dashed #333; margin: 10px 0; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 3px 0; vertical-align: top; }
+  td.r { text-align: right; }
+  .total-line { display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; margin-top: 6px; }
+  .thanks { margin-top: 14px; }
+</style>
+</head>
+<body>
+  <p class="center logo">℞</p>
+  <h2 class="center">RAJESHWARI MEDICAL</h2>
+  <p class="center meta">&amp; General Stores</p>
+  <p class="center meta">${escapeHtml(placed)}</p>
+  <hr/>
+  <p>Order ID: <strong>${shortId}</strong></p>
+  <p class="meta">Flat: ${escapeHtml(d.flat || "-")} | ${escapeHtml(order.customerPhone || "-")}</p>
+  ${d.altPhone ? `<p class="meta">Alt: ${escapeHtml(d.altPhone)}</p>` : ""}
+  <p class="meta">${escapeHtml(d.community || "-")} / ${escapeHtml(d.block || "-")}</p>
+  ${d.note ? `<p class="meta">Note: ${escapeHtml(d.note)}</p>` : ""}
+  <hr/>
+  <table>${itemRows}</table>
+  <hr/>
+  <div class="total-line"><span>TOTAL</span><span>₹${Number(order.total || 0).toFixed(2)}</span></div>
+  <p class="center thanks">Thank you! Visit again</p>
+</body>
+</html>`;
+}
+
+function printOrderReceipt(order) {
+  const printWindow = window.open("", "_blank", "width=380,height=640");
+  if (!printWindow) {
+    alert("Please allow pop-ups for this site to print the receipt.");
+    return;
+  }
+  printWindow.document.write(buildReceiptHTML(order));
+  printWindow.document.close();
+  printWindow.focus();
+  setTimeout(() => printWindow.print(), 300);
 }
 
 // ============================================================================
