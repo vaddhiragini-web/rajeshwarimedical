@@ -38,10 +38,27 @@ button, input { font-family: inherit; }
 img { max-width: 100%; display: block; }
 
 .screen { min-height: 100vh; }
-.screen[hidden] { display: none; }
 
-/* ---------------- Login screen ---------------- */
-#login-screen {
+/* ----------------------------------------------------------------
+   IMPORTANT FIX: #login-screen / #shop-screen previously declared
+   `display: flex` on an ID selector (specificity 1,0,0), which beats
+   the generic `.screen[hidden] { display: none }` rule (specificity
+   0,2,0). Result: setting the `hidden` attribute in JS had no visual
+   effect and every screen stayed on-screen at once (this is exactly
+   what showed up in the reported screenshot — login card and shop
+   page rendered stacked together). Fixing this by giving the hidden
+   rule the highest priority, scoped explicitly to every screen id.
+   ---------------------------------------------------------------- */
+#login-screen[hidden],
+#admin-login-screen[hidden],
+#shop-screen[hidden],
+.screen[hidden] {
+  display: none !important;
+}
+
+/* ---------------- Login screen (customer + admin share this look) ---------------- */
+#login-screen,
+#admin-login-screen {
   display: flex;
   align-items: center;
   justify-content: center;
