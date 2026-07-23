@@ -510,6 +510,15 @@ form label {
 }
 
 /* Checkout (delivery details) + confirmation views inside the cart drawer */
+#cart-view, #checkout-view, #confirmation-view {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0; /* lets .drawer-body scroll instead of pushing the footer off-screen */
+}
+#cart-view[hidden], #checkout-view[hidden], #confirmation-view[hidden] {
+  display: none;
+}
 #checkout-view .drawer-body,
 #confirmation-view .drawer-body { padding: 20px; }
 .section-title { font-size: 15px; font-weight: 700; margin: 0 0 14px; display: flex; align-items: center; gap: 6px; }
