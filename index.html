@@ -14,10 +14,11 @@
   <!-- LOGIN SCREEN -->
   <section id="login-screen" class="screen">
     <div class="login-card">
+      <span class="login-mark">℞</span>
       <h1>Welcome back</h1>
       <p class="login-sub">Enter your details to start ordering</p>
 
-      <form id="login-form">
+      <form id="login-form" novalidate>
         <label for="c-name">Your Name</label>
         <input type="text" id="c-name" class="text-field" required placeholder="Enter your name" autocomplete="name" />
 
@@ -58,6 +59,8 @@
         <button type="button" class="link" id="logout-btn">Logout</button>
       </nav>
     </header>
+
+    <p id="backend-warning" class="backend-warning" hidden></p>
 
     <div class="hero">
       <div class="hero-copy">
