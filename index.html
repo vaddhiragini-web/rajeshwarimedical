@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Rajeshwari Medical & General Stores — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- LOGIN SCREEN -->
+  <section id="login-screen" class="screen">
+    <div class="login-card">
+      <div class="rx-mark">℞</div>
+      <h1>Rajeshwari Medical<br>& General Stores</h1>
+      <p class="eyebrow">Admin console</p>
+      <!-- Step 1: enter phone number -->
+      <form id="phone-form">
+        <label for="phone">Phone number</label>
+        <input type="tel" id="phone" required autocomplete="tel" placeholder="+91 98765 43210" />
+        <p class="hint-text">Include the country code, e.g. +91 for India.</p>
+        <button type="submit" class="btn btn-primary btn-block">Send code</button>
+        <p id="phone-error" class="error-text" hidden></p>
+        <button type="button" class="link-btn" data-show="email-form">Sign in with email instead</button>
+      </form>
+
+      <!-- Step 2: enter OTP (hidden until a code has been sent) -->
+      <form id="otp-form" hidden>
+        <label for="otp">Verification code</label>
+        <input type="text" id="otp" inputmode="numeric" pattern="[0-9]*" required autocomplete="one-time-code" placeholder="6-digit code" />
+        <p class="hint-text">Sent by SMS to <span id="otp-phone-display"></span>.</p>
+        <button type="submit" class="btn btn-primary btn-block">Verify & sign in</button>
+        <button type="button" id="change-number-btn" class="btn btn-ghost btn-block">Use a different number</button>
+        <p id="otp-error" class="error-text" hidden></p>
+      </form>
+
+      <!-- Email/password login (hidden by default, shown via the link above) -->
+      <form id="email-form" hidden>
+        <label for="email">Email</label>
+        <input type="email" id="email" autocomplete="username" placeholder="you@store.com" />
+        <label for="password">Password</label>
+        <input type="password" id="password" autocomplete="current-password" placeholder="••••••••" />
+        <button type="submit" class="btn btn-primary btn-block">Sign in</button>
+        <p id="email-error" class="error-text" hidden></p>
+        <button type="button" class="link-btn" data-show="phone-form">Sign in with phone instead</button>
+      </form>
+
+      <!-- Invisible reCAPTCHA anchor required by Firebase phone auth -->
+      <div id="recaptcha-container"></div>
+    </div>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="dashboard-screen" class="screen" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="rx-mark small">℞</span>
+        <div>
+          <strong>Rajeshwari</strong>
+          <small>Medical & General Stores</small>
+        </div>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-tab="products">
+          <span class="nav-index">01</span> Products
+        </button>
+        <button class="nav-btn" data-tab="orders">
+          <span class="nav-index">02</span> Orders
+        </button>
+      </nav>
+      <div class="sidebar-foot">
+        <span id="current-user">—</span>
+        <button id="logout-btn" class="btn btn-ghost">Sign out</button>
+      </div>
+    </aside>
+
+    <main>
+      <!-- PRODUCTS TAB -->
+      <div class="tab-panel" id="tab-products">
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Inventory · Supabase</p>
+            <h2>Products</h2>
+          </div>
+          <button id="add-product-btn" class="btn btn-primary">+ Add product</button>
+        </header>
+
+        <div id="product-form-wrap" class="form-card" hidden>
+          <h3 id="product-form-title">Add product</h3>
+          <form id="product-form">
+            <input type="hidden" id="product-id" />
+            <div class="grid-2">
+              <div>
+                <label for="p-name">Name</label>
+                <input type="text" id="p-name" required placeholder="Paracetamol 500mg" />
+              </div>
+              <div>
+                <label for="p-sku">SKU</label>
+                <input type="text" id="p-sku" required placeholder="MED-0142" />
+              </div>
+              <div>
+                <label for="p-category">Category</label>
+                <input type="text" id="p-category" required placeholder="Pain relief" />
+              </div>
+              <div>
+                <label for="p-price">Price (₹)</label>
+                <input type="number" id="p-price" step="0.01" min="0" required placeholder="45.00" />
+              </div>
+              <div>
+                <label for="p-stock">Stock on hand</label>
+                <input type="number" id="p-stock" min="0" required placeholder="120" />
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" id="cancel-product-btn" class="btn btn-ghost">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="save-product-btn">Save product</button>
+            </div>
+          </form>
+        </div>
+
+        <p id="products-error" class="error-text" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th>Name</th>
+                <th>SKU</th>
+                <th>Category</th>
+                <th>Price</th>
+                <th>Stock</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="products-tbody">
+              <tr class="empty-row"><td colspan="7">Loading products…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ORDERS TAB -->
+      <div class="tab-panel" id="tab-orders" hidden>
+        <header class="panel-header">
+          <div>
+            <p class="eyebrow">Fulfillment · Firestore</p>
+            <h2>Orders</h2>
+          </div>
+        </header>
+        <p id="orders-error" class="error-text" hidden></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Order</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Placed</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody id="orders-tbody">
+              <tr class="empty-row"><td colspan="6">Loading orders…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <!-- Supabase client (products) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <!-- Firebase (auth + orders) -->
+  <script type="module" src="app.js"></script>
+</body>
+</html>
