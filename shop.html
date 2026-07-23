@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Shop — Rajeshwari Medical & General Stores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="customer.css" />
+</head>
+<body>
+
+<header class="shop-header">
+  <div class="shop-header-inner">
+    <div class="shop-brand">
+      <span class="brand-mark">℞</span>
+      <span>Rajeshwari Medical <span class="tagline">/ Shop</span></span>
+    </div>
+    <nav class="shop-nav">
+      <a href="#" id="nav-previous-orders">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Previous Orders
+      </a>
+      <a href="shop.html" class="active">Shop</a>
+      <a href="#" id="nav-cart" class="cart-btn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 3h2l2.4 12.4a2 2 0 0 0 2 1.6h7.2a2 2 0 0 0 2-1.6L20 8H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="9" cy="20" r="1.5" fill="currentColor"/><circle cx="17" cy="20" r="1.5" fill="currentColor"/></svg>
+        Cart <span class="cart-count" id="cart-count">0</span>
+      </a>
+      <span class="shop-user" id="shop-user">—</span>
+      <a href="#" class="logout-link" id="logout-link">Logout</a>
+    </nav>
+  </div>
+</header>
+
+<main class="shop-main">
+  <section class="hero">
+    <div class="hero-inner">
+      <h1>Everyday Health, Delivered</h1>
+      <p>Medicines, wellness essentials and more from your neighbourhood store, brought straight to your door.</p>
+    </div>
+  </section>
+
+  <div class="search-row">
+    <div class="search-wrap">
+      <span class="icon">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </span>
+      <input type="text" id="search-input" placeholder="Search products…" />
+    </div>
+    <span class="item-count" id="item-count">— items</span>
+  </div>
+
+  <div class="product-grid" id="product-grid">
+    <p class="load-state">Loading products…</p>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="customer.js"></script>
+<script>
+  // Same Supabase project as the admin dashboard — the "products" table
+  // allows public SELECT, so the shop can read it directly with the anon key.
+  const SUPABASE_URL = "https://eqqxjfzokwqsamznvikb.supabase.co";
+  const SUPABASE_ANON_KEY =
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVxcXhqZnpva3dxc2Ftem52aWtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ4MDI2MTIsImV4cCI6MjEwMDM3ODYxMn0.dOcs7w0B7Iw99B4-sXbi1ZLas08hg3xUrrkYyUuN3Po";
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // ---- Require a customer session --------------------------------------
+  const session = getCustomerSession();
+  if (!session) {
+    window.location.href = "login.html";
+  }
+  document.getElementById("shop-user").textContent = session ? session.name : "—";
+
+  document.getElementById("logout-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    clearCustomerSession();
+    window.location.href = "login.html";
+  });
+
+  // ---- Cart --------------------------------------------------------------
+  function refreshCartCount() {
+    document.getElementById("cart-count").textContent = cartItemCount();
+  }
+  refreshCartCount();
+
+  document.getElementById("nav-cart").addEventListener("click", (e) => {
+    e.preventDefault();
+    alert("Cart page isn't built yet — this button just tracks item counts for now.");
+  });
+  document.getElementById("nav-previous-orders").addEventListener("click", (e) => {
+    e.preventDefault();
+    alert("Previous orders page isn't built yet.");
+  });
+
+  // ---- Products ------------------------------------------------------------
+  let allProducts = [];
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str ?? "";
+    return div.innerHTML;
+  }
+
+  function stockInfo(stock) {
+    if (stock <= 0) return { cls: "out", label: "Out of stock" };
+    if (stock < 5) return { cls: "low", label: "Only " + stock + " left" };
+    return { cls: "ok", label: "In stock" };
+  }
+
+  function renderProducts(products) {
+    const grid = document.getElementById("product-grid");
+    document.getElementById("item-count").textContent = products.length + " item" + (products.length === 1 ? "" : "s");
+
+    if (products.length === 0) {
+      grid.innerHTML = `<p class="empty-state">No products match your search.</p>`;
+      return;
+    }
+
+    const cart = getCart();
+
+    grid.innerHTML = products
+      .map((p) => {
+        const stock = stockInfo(p.stock);
+        const inCart = !!cart[p.id];
+        return `
+          <article class="product-card" data-id="${p.id}">
+            <div class="product-media">
+              <span class="stock-badge ${stock.cls}">${stock.label}</span>
+              <span class="price-badge">₹${Number(p.price).toFixed(2)}</span>
+              ${escapeHtml(p.name)}
+            </div>
+            <div class="product-body">
+              <h3>${escapeHtml(p.name)}</h3>
+              <p class="cat">${escapeHtml(p.category || "")}</p>
+              <button class="add-btn ${inCart ? "added" : ""}" data-id="${p.id}" ${p.stock <= 0 ? "disabled" : ""}>
+                ${p.stock <= 0 ? "Unavailable" : inCart ? "Added ✓" : "Add to Cart"}
+              </button>
+            </div>
+          </article>`;
+      })
+      .join("");
+
+    grid.querySelectorAll(".add-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const cart = getCart();
+        cart[btn.dataset.id] = (cart[btn.dataset.id] || 0) + 1;
+        setCart(cart);
+        btn.textContent = "Added ✓";
+        btn.classList.add("added");
+        refreshCartCount();
+      });
+    });
+  }
+
+  async function loadProducts() {
+    const grid = document.getElementById("product-grid");
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("name", { ascending: true });
+
+    if (error) {
+      grid.innerHTML = `<p class="empty-state">Couldn't load products: ${escapeHtml(error.message)}</p>`;
+      return;
+    }
+
+    allProducts = data || [];
+    renderProducts(allProducts);
+  }
+
+  document.getElementById("search-input").addEventListener("input", (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    const filtered = !q
+      ? allProducts
+      : allProducts.filter(
+          (p) =>
+            (p.name || "").toLowerCase().includes(q) ||
+            (p.category || "").toLowerCase().includes(q) ||
+            (p.sku || "").toLowerCase().includes(q)
+        );
+    renderProducts(filtered);
+  });
+
+  loadProducts();
+</script>
+</body>
+</html>
