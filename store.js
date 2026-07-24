@@ -120,8 +120,10 @@ const confirmationView = document.getElementById("confirmation-view");
 const cartDrawerTitle = document.getElementById("cart-drawer-title");
 
 const deliveryForm = document.getElementById("delivery-form");
-const dCommunity = document.getElementById("d-community");
-const dBlock = document.getElementById("d-block");
+const dStreet = document.getElementById("d-street");
+const dLandmark = document.getElementById("d-landmark");
+const dMandal = document.getElementById("d-mandal");
+const dDistrict = document.getElementById("d-district");
 const dFlat = document.getElementById("d-flat");
 const dAltPhone = document.getElementById("d-alt-phone");
 const dNote = document.getElementById("d-note");
@@ -630,14 +632,16 @@ placeOrderBtn.addEventListener("click", async () => {
   const entries = Object.entries(cart);
   if (!session) return;
 
-  const community = dCommunity.value.trim();
-  const block = dBlock.value.trim();
+  const street = dStreet.value.trim();
+  const landmark = dLandmark.value.trim();
+  const mandal = dMandal.value.trim();
+  const district = dDistrict.value.trim();
   const flat = dFlat.value.trim();
   const altPhoneDigits = dAltPhone.value.trim();
   const note = dNote.value.trim();
 
-  if (!community || !block || !flat) {
-    deliveryError.textContent = "Please fill in your community, block, and flat/house number.";
+  if (!street || !landmark || !mandal || !district || !flat) {
+    deliveryError.textContent = "Please fill in your street, landmark, mandal, district, and flat/house number.";
     deliveryError.hidden = false;
     return;
   }
@@ -670,8 +674,10 @@ placeOrderBtn.addEventListener("click", async () => {
   const total = items.reduce((sum, i) => sum + i.qty * i.price, 0);
 
   const deliveryDetails = {
-    community,
-    block,
+    street,
+    landmark,
+    mandal,
+    district,
     flat,
     altPhone: altPhoneDigits ? `+91${altPhoneDigits}` : "",
     note,
@@ -792,7 +798,8 @@ function buildReceiptHTML(order) {
   <p>Order ID: <strong>${shortId}</strong></p>
   <p class="meta">Flat: ${escapeHtml(d.flat || "-")} | ${escapeHtml(order.customerPhone || "-")}</p>
   ${d.altPhone ? `<p class="meta">Alt: ${escapeHtml(d.altPhone)}</p>` : ""}
-  <p class="meta">${escapeHtml(d.community || "-")} / ${escapeHtml(d.block || "-")}</p>
+  <p class="meta">${escapeHtml(d.street || "-")}, ${escapeHtml(d.landmark || "-")}</p>
+  <p class="meta">${escapeHtml(d.mandal || "-")} / ${escapeHtml(d.district || "-")}</p>
   ${d.note ? `<p class="meta">Note: ${escapeHtml(d.note)}</p>` : ""}
   ${attachmentLine}
   <hr/>
