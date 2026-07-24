@@ -287,7 +287,8 @@ function buildReceiptHTML(order) {
   <p>Order ID: <strong>${shortId}</strong></p>
   <p class="meta">Flat: ${escapeHtml(d.flat || "-")} | ${escapeHtml(order.customerPhone || "-")}</p>
   ${d.altPhone ? `<p class="meta">Alt: ${escapeHtml(d.altPhone)}</p>` : ""}
-  <p class="meta">${escapeHtml(d.community || "-")} / ${escapeHtml(d.block || "-")}</p>
+  <p class="meta">${escapeHtml(d.street || "-")}, ${escapeHtml(d.landmark || "-")}</p>
+  <p class="meta">${escapeHtml(d.mandal || "-")} / ${escapeHtml(d.district || "-")}</p>
   ${d.note ? `<p class="meta">Note: ${escapeHtml(d.note)}</p>` : ""}
   ${attachmentLine}
   <hr/>
