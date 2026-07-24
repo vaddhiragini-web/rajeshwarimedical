@@ -134,11 +134,22 @@
         <form id="delivery-form" novalidate>
           <h3 class="section-title">🚚 Delivery Details</h3>
 
-          <label for="d-community">Your Community</label>
-          <input type="text" id="d-community" class="text-field" required placeholder="Select your community" />
+          <label for="d-street">Street</label>
+          <input type="text" id="d-street" class="text-field" required placeholder="e.g. Main Road, Gandhi Nagar" />
 
-          <label for="d-block">Your Block</label>
-          <input type="text" id="d-block" class="text-field" required placeholder="Choose community first" />
+          <label for="d-landmark">Landmark</label>
+          <input type="text" id="d-landmark" class="text-field" required placeholder="e.g. Near Bus Stand" />
+
+          <div class="field-row">
+            <div class="field-col">
+              <label for="d-mandal">Mandal</label>
+              <input type="text" id="d-mandal" class="text-field" required placeholder="e.g. Uppal" />
+            </div>
+            <div class="field-col">
+              <label for="d-district">District</label>
+              <input type="text" id="d-district" class="text-field" required placeholder="e.g. Medchal-Malkajgiri" />
+            </div>
+          </div>
 
           <label for="d-flat">Flat / House Number</label>
           <input type="text" id="d-flat" class="text-field" required placeholder="e.g. 101, A-12" />
@@ -183,7 +194,7 @@
       <div class="drawer-body confirmation-body">
         <p class="confirmation-check">✅</p>
         <p class="confirmation-order-id">Order ID: <strong id="confirm-order-id">—</strong></p>
-        <p class="confirmation-sub">We'll deliver to your community &amp; block soon.</p>
+        <p class="confirmation-sub">We'll deliver to your address soon.</p>
       </div>
       <div class="drawer-foot">
         <button type="button" class="btn btn-ghost btn-block" id="print-receipt-btn">🖶 Print Receipt</button>
