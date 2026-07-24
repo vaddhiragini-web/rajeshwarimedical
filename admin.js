@@ -184,9 +184,15 @@ function renderOrders() {
   ordersTableBody.innerHTML = allOrders
     .map((o) => {
       const when = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "Just now";
-      const itemsSummary = Array.isArray(o.items)
-        ? o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")
-        : "—";
+      const attachmentTag = o.attachment
+        ? `<br/><a href="${o.attachment.url}" target="_blank" rel="noopener" class="attachment-link">📎 ${escapeHtml(o.attachment.name)}</a>`
+        : "";
+      const itemsSummary =
+        Array.isArray(o.items) && o.items.length
+          ? o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")
+          : o.attachment
+          ? "No items — see attachment"
+          : "—";
       const status = o.status || "pending";
       const options = STATUS_OPTIONS.map(
         (s) => `<option value="${s}" ${s === status ? "selected" : ""}>${s}</option>`
@@ -197,7 +203,7 @@ function renderOrders() {
           <td>${when}</td>
           <td>${escapeHtml(o.customerName || "—")}</td>
           <td>${escapeHtml(o.customerPhone || "—")}</td>
-          <td>${escapeHtml(itemsSummary)}</td>
+          <td>${escapeHtml(itemsSummary)}${attachmentTag}</td>
           <td>₹${Number(o.total || 0).toFixed(2)}</td>
           <td><span class="status-pill ${status}">${status}</span></td>
           <td>
@@ -240,12 +246,18 @@ function buildReceiptHTML(order) {
   const shortId = order.id.slice(0, 8).toUpperCase();
   const d = order.deliveryDetails || {};
 
-  const itemRows = (order.items || [])
-    .map(
-      (i) =>
-        `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
-    )
-    .join("");
+  const itemRows = (order.items || []).length
+    ? order.items
+        .map(
+          (i) =>
+            `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
+        )
+        .join("")
+    : `<tr><td colspan="3" style="font-style:italic;">No items listed — see attached file</td></tr>`;
+
+  const attachmentLine = order.attachment
+    ? `<p class="meta">📎 Attached: ${escapeHtml(order.attachment.name)}</p>`
+    : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -277,6 +289,7 @@ function buildReceiptHTML(order) {
   ${d.altPhone ? `<p class="meta">Alt: ${escapeHtml(d.altPhone)}</p>` : ""}
   <p class="meta">${escapeHtml(d.community || "-")} / ${escapeHtml(d.block || "-")}</p>
   ${d.note ? `<p class="meta">Note: ${escapeHtml(d.note)}</p>` : ""}
+  ${attachmentLine}
   <hr/>
   <table>${itemRows}</table>
   <hr/>
