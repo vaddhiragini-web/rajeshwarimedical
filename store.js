@@ -127,6 +127,13 @@ const dAltPhone = document.getElementById("d-alt-phone");
 const dNote = document.getElementById("d-note");
 const deliveryError = document.getElementById("delivery-error");
 
+const dFile = document.getElementById("d-file");
+const filePreview = document.getElementById("file-preview");
+const filePreviewName = document.getElementById("file-preview-name");
+const removeFileBtn = document.getElementById("remove-file-btn");
+const fileUploadStatus = document.getElementById("file-upload-status");
+let selectedFile = null;
+
 const checkoutSummaryLines = document.getElementById("checkout-summary-lines");
 const checkoutTotalEl = document.getElementById("checkout-total");
 const backToCartBtn = document.getElementById("back-to-cart-btn");
@@ -150,6 +157,7 @@ let allProducts = [];
 // function that uses them checks for null first, so a failed/slow backend
 // never blocks login, browsing the (empty) grid, or the cart drawer.
 let db = null;
+let storage = null;
 let supabaseClient = null;
 let firebaseFns = null; // { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp }
 
@@ -268,12 +276,14 @@ async function initBackend() {
   // Firebase, via dynamic import so a network/CDN failure can't take down
   // the rest of the script.
   try {
-    const [{ initializeApp }, firestoreMod] = await Promise.all([
+    const [{ initializeApp }, firestoreMod, storageMod] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
       import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
+      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js"),
     ]);
     const firebaseApp = initializeApp(firebaseConfig);
     db = firestoreMod.getFirestore(firebaseApp);
+    storage = storageMod.getStorage(firebaseApp);
     firebaseFns = {
       collection: firestoreMod.collection,
       addDoc: firestoreMod.addDoc,
@@ -282,10 +292,14 @@ async function initBackend() {
       where: firestoreMod.where,
       orderBy: firestoreMod.orderBy,
       serverTimestamp: firestoreMod.serverTimestamp,
+      storageRef: storageMod.ref,
+      uploadBytes: storageMod.uploadBytes,
+      getDownloadURL: storageMod.getDownloadURL,
     };
   } catch (err) {
     console.error("Firebase init failed:", err);
     db = null;
+    storage = null;
     firebaseFns = null;
   }
 
@@ -448,7 +462,8 @@ function renderCartFromStorage() {
 
   cartCountEl.textContent = totalQty;
   cartTotalEl.textContent = `₹${totalPrice.toFixed(2)}`;
-  checkoutBtn.disabled = totalQty === 0;
+  // Not disabled when empty: a customer can check out with just an uploaded
+  // file (e.g. a prescription photo) and no catalog items at all.
 
   if (entries.length === 0) {
     cartBody.innerHTML = `<p class="loading-state">Your cart is empty.</p>`;
@@ -518,16 +533,60 @@ function showCartStep(step) {
 checkoutBtn.addEventListener("click", () => {
   const cart = getCart();
   const entries = Object.entries(cart);
-  if (entries.length === 0) return;
+  // No early return on empty cart — a customer may check out with only an
+  // uploaded file (e.g. a prescription) and no catalog items.
 
   const total = entries.reduce((sum, [, item]) => sum + item.qty * item.price, 0);
-  checkoutSummaryLines.innerHTML = entries
-    .map(([, item]) => `<div><span>${escapeHtml(item.name)} x ${item.qty}</span><span>₹${(item.qty * item.price).toFixed(2)}</span></div>`)
-    .join("");
+  checkoutSummaryLines.innerHTML =
+    entries.length > 0
+      ? entries
+          .map(([, item]) => `<div><span>${escapeHtml(item.name)} x ${item.qty}</span><span>₹${(item.qty * item.price).toFixed(2)}</span></div>`)
+          .join("")
+      : `<div><span>No items selected — pharmacist will confirm items from your uploaded file.</span></div>`;
   checkoutTotalEl.textContent = `₹${total.toFixed(2)}`;
 
   showCartStep("checkout");
 });
+
+// File attach: preview selected file, allow removing it before submit
+function formatFileSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+dFile.addEventListener("change", () => {
+  const file = dFile.files && dFile.files[0];
+  if (!file) return;
+
+  // Firebase Storage's default rules commonly cap uploads; keep a sane
+  // client-side ceiling too so a huge file doesn't silently hang.
+  const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
+  if (file.size > MAX_BYTES) {
+    deliveryError.textContent = "That file is too large (max 15 MB). Please choose a smaller file.";
+    deliveryError.hidden = false;
+    dFile.value = "";
+    return;
+  }
+
+  selectedFile = file;
+  filePreviewName.textContent = `${file.name} (${formatFileSize(file.size)})`;
+  filePreview.hidden = false;
+});
+
+removeFileBtn.addEventListener("click", () => {
+  selectedFile = null;
+  dFile.value = "";
+  filePreview.hidden = true;
+});
+
+function resetFileUpload() {
+  selectedFile = null;
+  dFile.value = "";
+  filePreview.hidden = true;
+  fileUploadStatus.hidden = true;
+  fileUploadStatus.textContent = "";
+}
 
 // STEP 2 -> 1: "Back to Cart"
 backToCartBtn.addEventListener("click", () => showCartStep("cart"));
@@ -539,7 +598,7 @@ placeOrderBtn.addEventListener("click", async () => {
   const session = getSession();
   const cart = getCart();
   const entries = Object.entries(cart);
-  if (!session || entries.length === 0) return;
+  if (!session) return;
 
   const community = dCommunity.value.trim();
   const block = dBlock.value.trim();
@@ -554,6 +613,11 @@ placeOrderBtn.addEventListener("click", async () => {
   }
   if (altPhoneDigits && !/^[0-9]{10}$/.test(altPhoneDigits)) {
     deliveryError.textContent = "Alt mobile must be a valid 10-digit number, or left blank.";
+    deliveryError.hidden = false;
+    return;
+  }
+  if (entries.length === 0 && !selectedFile) {
+    deliveryError.textContent = "Add at least one item to your cart, or upload a file, to place an order.";
     deliveryError.hidden = false;
     return;
   }
@@ -584,12 +648,38 @@ placeOrderBtn.addEventListener("click", async () => {
   };
 
   try {
+    // Upload the attached file first (if any) so its URL can be stored on
+    // the order itself.
+    let attachment = null;
+    if (selectedFile) {
+      if (!storage) {
+        throw new Error("File storage isn't connected right now — try again in a moment, or place the order without the attachment.");
+      }
+      fileUploadStatus.hidden = false;
+      fileUploadStatus.textContent = "Uploading file…";
+
+      const safeName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const path = `order-attachments/${session.phone}_${Date.now()}_${safeName}`;
+      const ref = firebaseFns.storageRef(storage, path);
+      await firebaseFns.uploadBytes(ref, selectedFile, { contentType: selectedFile.type || "application/octet-stream" });
+      const url = await firebaseFns.getDownloadURL(ref);
+
+      attachment = {
+        name: selectedFile.name,
+        url,
+        type: selectedFile.type || "application/octet-stream",
+        size: selectedFile.size,
+      };
+      fileUploadStatus.textContent = "File uploaded.";
+    }
+
     const docRef = await firebaseFns.addDoc(firebaseFns.collection(db, "orders"), {
       customerName: session.name,
       customerPhone: session.phone,
       items,
       total,
       deliveryDetails,
+      attachment,
       status: "pending",
       createdAt: firebaseFns.serverTimestamp(),
     });
@@ -601,6 +691,7 @@ placeOrderBtn.addEventListener("click", async () => {
       items,
       total,
       deliveryDetails,
+      attachment,
       placedAt: new Date(),
     };
 
@@ -608,12 +699,14 @@ placeOrderBtn.addEventListener("click", async () => {
     renderCartFromStorage();
     renderGrid(allProducts);
     deliveryForm.reset();
+    resetFileUpload();
 
     confirmOrderIdEl.textContent = docRef.id.slice(0, 8).toUpperCase();
     showCartStep("confirmation");
   } catch (err) {
     deliveryError.textContent = "Couldn't place order: " + err.message;
     deliveryError.hidden = false;
+    fileUploadStatus.hidden = true;
   } finally {
     placeOrderBtn.disabled = false;
     placeOrderBtn.textContent = "Place Order";
@@ -641,12 +734,18 @@ function buildReceiptHTML(order) {
   const shortId = order.id.slice(0, 8).toUpperCase();
   const d = order.deliveryDetails || {};
 
-  const itemRows = (order.items || [])
-    .map(
-      (i) =>
-        `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
-    )
-    .join("");
+  const itemRows = (order.items || []).length
+    ? order.items
+        .map(
+          (i) =>
+            `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
+        )
+        .join("")
+    : `<tr><td colspan="3" style="font-style:italic;">No items listed — see attached file</td></tr>`;
+
+  const attachmentLine = order.attachment
+    ? `<p class="meta">📎 Attached: ${escapeHtml(order.attachment.name)}</p>`
+    : "";
 
   return `<!DOCTYPE html>
 <html>
@@ -678,6 +777,7 @@ function buildReceiptHTML(order) {
   ${d.altPhone ? `<p class="meta">Alt: ${escapeHtml(d.altPhone)}</p>` : ""}
   <p class="meta">${escapeHtml(d.community || "-")} / ${escapeHtml(d.block || "-")}</p>
   ${d.note ? `<p class="meta">Note: ${escapeHtml(d.note)}</p>` : ""}
+  ${attachmentLine}
   <hr/>
   <table>${itemRows}</table>
   <hr/>
