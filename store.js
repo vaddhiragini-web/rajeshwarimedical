@@ -5,7 +5,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDDwC_AojbttZKz9LmKk-7wH46yS6cq9Ic",
   authDomain: "rajeshwarimedical-78b78.firebaseapp.com",
   projectId: "rajeshwarimedical-78b78",
-  storageBucket: "rajeshwarimedical-78b78.firebasestorage.app",
+  storageBucket: "rajeshwarimedical-78b78.firebasestorage.app", // unused — file uploads now go to Supabase Storage, see ATTACHMENTS_BUCKET below
   messagingSenderId: "818567753854",
   appId: "1:818567753854:web:65509e76ac464cfcf0282f",
   measurementId: "G-0CJJHQKZWS",
@@ -157,7 +157,6 @@ let allProducts = [];
 // function that uses them checks for null first, so a failed/slow backend
 // never blocks login, browsing the (empty) grid, or the cart drawer.
 let db = null;
-let storage = null;
 let supabaseClient = null;
 let firebaseFns = null; // { collection, addDoc, onSnapshot, query, where, orderBy, serverTimestamp }
 
@@ -273,17 +272,16 @@ async function initBackend() {
     supabaseClient = null;
   }
 
-  // Firebase, via dynamic import so a network/CDN failure can't take down
-  // the rest of the script.
+  // Firebase (Firestore only — file uploads go to Supabase Storage instead,
+  // see uploadAttachment()), via dynamic import so a network/CDN failure
+  // can't take down the rest of the script.
   try {
-    const [{ initializeApp }, firestoreMod, storageMod] = await Promise.all([
+    const [{ initializeApp }, firestoreMod] = await Promise.all([
       import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js"),
       import("https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js"),
-      import("https://www.gstatic.com/firebasejs/10.14.1/firebase-storage.js"),
     ]);
     const firebaseApp = initializeApp(firebaseConfig);
     db = firestoreMod.getFirestore(firebaseApp);
-    storage = storageMod.getStorage(firebaseApp);
     firebaseFns = {
       collection: firestoreMod.collection,
       addDoc: firestoreMod.addDoc,
@@ -292,14 +290,10 @@ async function initBackend() {
       where: firestoreMod.where,
       orderBy: firestoreMod.orderBy,
       serverTimestamp: firestoreMod.serverTimestamp,
-      storageRef: storageMod.ref,
-      uploadBytes: storageMod.uploadBytes,
-      getDownloadURL: storageMod.getDownloadURL,
     };
   } catch (err) {
     console.error("Firebase init failed:", err);
     db = null;
-    storage = null;
     firebaseFns = null;
   }
 
@@ -548,6 +542,42 @@ checkoutBtn.addEventListener("click", () => {
   showCartStep("checkout");
 });
 
+// The Supabase Storage bucket used for order attachments (prescriptions,
+// etc). Create this bucket once in your Supabase project: Storage -> New
+// bucket -> name it exactly this, and mark it Public.
+const ATTACHMENTS_BUCKET = "order-attachments";
+
+// Uploads a file to Supabase Storage and returns {name, url, type, size}
+// for storing on the Firestore order document. Throws on failure.
+async function uploadAttachment(file, phone) {
+  if (!supabaseClient) {
+    throw new Error("File storage isn't connected right now — try again in a moment, or place the order without the attachment.");
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${phone}_${Date.now()}_${safeName}`;
+
+  const { error: uploadError } = await supabaseClient.storage
+    .from(ATTACHMENTS_BUCKET)
+    .upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new Error(`Couldn't upload file: ${uploadError.message}`);
+  }
+
+  const { data: urlData } = supabaseClient.storage.from(ATTACHMENTS_BUCKET).getPublicUrl(path);
+
+  return {
+    name: file.name,
+    url: urlData.publicUrl,
+    type: file.type || "application/octet-stream",
+    size: file.size,
+  };
+}
+
 // File attach: preview selected file, allow removing it before submit
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -649,27 +679,14 @@ placeOrderBtn.addEventListener("click", async () => {
 
   try {
     // Upload the attached file first (if any) so its URL can be stored on
-    // the order itself.
+    // the order itself. Uses Supabase Storage (same project as the product
+    // catalog) rather than Firebase Storage, which now requires the Blaze
+    // billing plan even for small uploads.
     let attachment = null;
     if (selectedFile) {
-      if (!storage) {
-        throw new Error("File storage isn't connected right now — try again in a moment, or place the order without the attachment.");
-      }
       fileUploadStatus.hidden = false;
       fileUploadStatus.textContent = "Uploading file…";
-
-      const safeName = selectedFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-      const path = `order-attachments/${session.phone}_${Date.now()}_${safeName}`;
-      const ref = firebaseFns.storageRef(storage, path);
-      await firebaseFns.uploadBytes(ref, selectedFile, { contentType: selectedFile.type || "application/octet-stream" });
-      const url = await firebaseFns.getDownloadURL(ref);
-
-      attachment = {
-        name: selectedFile.name,
-        url,
-        type: selectedFile.type || "application/octet-stream",
-        size: selectedFile.size,
-      };
+      attachment = await uploadAttachment(selectedFile, session.phone);
       fileUploadStatus.textContent = "File uploaded.";
     }
 
