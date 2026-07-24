@@ -152,6 +152,16 @@
           <label for="d-note">Packing Note (optional)</label>
           <textarea id="d-note" class="text-field" rows="2" placeholder="Any special packing instructions"></textarea>
 
+          <label for="d-file">Attach a File (optional)</label>
+          <p class="field-hint">Upload a prescription photo, or any file — you can order with items, a file, or both.</p>
+          <input type="file" id="d-file" class="file-input" />
+          <div id="file-preview" class="file-preview" hidden>
+            <span id="file-preview-icon">📎</span>
+            <span id="file-preview-name" class="file-preview-name"></span>
+            <button type="button" id="remove-file-btn" class="remove-file-btn" aria-label="Remove file">✕</button>
+          </div>
+          <p id="file-upload-status" class="file-upload-status" hidden></p>
+
           <p id="delivery-error" class="error-text" hidden></p>
         </form>
 
