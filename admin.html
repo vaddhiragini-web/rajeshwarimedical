@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Admin · Rajeshwari Medical & General Stores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="store.css" />
+
+</head>
+<body>
+  <style>
+    :root{--primary:#18864a;--primary-dark:#126837;--border:#e3ece6;--text:#1d2b22;--shadow:0 12px 35px rgba(0,0,0,.08);}
+
+body{margin:0;font-family:'Inter',sans-serif;background:#f5faf7;color:var(--text);}
+
+.admin-header{height:72px;background:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 35px;border-bottom:1px solid var(--border);box-shadow:var(--shadow);position:sticky;top:0;z-index:100;}
+.admin-header-right,.live-label{display:flex;align-items:center;gap:18px;}
+.admin-pill{background:var(--primary);color:#fff;padding:8px 18px;border-radius:30px;font-size:14px;font-weight:600;}
+.link{border:none;background:none;color:var(--primary);cursor:pointer;font-weight:600;font-size:15px;}
+
+.admin-wrap{width:95%;max-width:1400px;margin:35px auto;}
+
+.admin-tabs{display:flex;gap:15px;margin-bottom:30px;flex-wrap:wrap;}
+.admin-tab{padding:12px 28px;border:none;border-radius:40px;background:#fff;cursor:pointer;font-weight:600;transition:.3s;box-shadow:0 4px 12px rgba(0,0,0,.06);}
+.admin-tab:hover,.admin-tab.active{background:var(--primary);color:#fff;}
+
+.admin-panel{background:#fff;padding:28px;border-radius:20px;box-shadow:var(--shadow);}
+
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:25px;}
+.stat-card{background:linear-gradient(135deg,#18864a,#23b662);color:#fff;border-radius:18px;padding:30px;}
+.stat-label{margin:0;opacity:.8;font-size:15px;}
+.stat-value{margin-top:15px;font-size:34px;font-weight:800;}
+
+.admin-section-title{margin:30px 0 20px;font-size:20px;font-weight:700;}
+
+.table-scroll{overflow:auto;}
+.admin-table{width:100%;border-collapse:collapse;min-width:900px;}
+.admin-table th{background:#18864a;color:#fff;padding:15px;text-align:left;}
+.admin-table td{padding:15px;border-bottom:1px solid var(--border);}
+.admin-table tr:hover{background:#f8fffb;}
+
+.status-pill{padding:6px 14px;border-radius:30px;color:#fff;font-size:13px;font-weight:600;}
+.pending{background:#ff9800;}
+.accepted{background:#2196f3;}
+.fulfilled,.delivered{background:#2e7d32;}
+.cancelled{background:#d32f2f;}
+
+.product-form{margin-bottom:35px;}
+.product-form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;}
+.product-form-wide{grid-column:1/-1;}
+
+label{display:block;margin-bottom:8px;font-weight:600;}
+.text-field{width:100%;padding:14px;border:1px solid var(--border);border-radius:12px;outline:none;}
+.text-field:focus{border-color:var(--primary);}
+.product-form-actions{display:flex;gap:15px;margin-top:25px;}
+
+.btn{border:none;cursor:pointer;padding:14px 28px;border-radius:12px;font-weight:700;}
+.btn-primary{background:var(--primary);color:#fff;}
+.btn-primary:hover{background:var(--primary-dark);}
+.btn-ghost{background:#f2f2f2;}
+.btn-ghost:hover{background:#ddd;}
+
+.live-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px;}
+.live-dot{width:12px;height:12px;border-radius:50%;background:#27c94b;animation:pulse 1.3s infinite;}
+
+@keyframes pulse{0%{transform:scale(1);opacity:1;}100%{transform:scale(1.8);opacity:.2;}}
+
+.switch{position:relative;display:inline-block;width:60px;height:32px;}
+.switch input{display:none;}
+.switch-track{position:absolute;inset:0;background:#ddd;border-radius:50px;cursor:pointer;}
+.switch-thumb{position:absolute;width:26px;height:26px;border-radius:50%;background:#fff;left:3px;top:3px;transition:.3s;}
+.switch input:checked+.switch-track{background:var(--primary);}
+.switch input:checked+.switch-track .switch-thumb{transform:translateX(28px);}
+
+.connect-printer-btn{position:fixed;right:25px;bottom:25px;background:var(--primary);color:#fff;border:none;padding:16px 24px;border-radius:50px;cursor:pointer;font-weight:700;box-shadow:0 12px 30px rgba(0,0,0,.2);}
+.connect-printer-btn:hover{background:var(--primary-dark);}
+
+.admin-empty{text-align:center;padding:35px;color:#888;}
+
+.print-order-btn{display:block;width:100%;margin-top:8px;font-size:12px;padding:8px 12px;}
+
+.attachment-link{font-size:12px;color:#0a7d3c;text-decoration:none;}
+.attachment-link:hover{text-decoration:underline;}
+
+@media(max-width:768px){
+.admin-header{padding:14px 18px;height:auto;flex-direction:column;gap:12px;}
+.admin-header .brand{font-size:15px;}
+.admin-header-right{width:100%;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.admin-wrap{width:98%;margin:20px auto;}
+.admin-tabs{justify-content:center;gap:10px;}
+.admin-tab{padding:10px 20px;font-size:13px;}
+.admin-panel{padding:18px;}
+.product-form-grid,.stat-grid{grid-template-columns:1fr;}
+.table-scroll{overflow:auto;-webkit-overflow-scrolling:touch;}
+.admin-table{min-width:700px;}
+.connect-printer-btn{width:90%;left:5%;right:5%;bottom:20px;font-size:13px;padding:14px 18px;}
+.admin-section-title{font-size:18px;}
+.text-field{padding:12px;}
+}
+@media(max-width:480px){
+.admin-header{padding:12px;gap:8px;}
+.admin-header .brand{font-size:13px;}
+.admin-header .brand .mark{width:26px;height:26px;font-size:13px;}
+.admin-header .brand .tag{font-size:11px;}
+.admin-header .admin-tag{font-size:13px;}
+.admin-pill{font-size:12px;padding:6px 12px;}
+.link{font-size:13px;}
+.admin-wrap{margin:12px auto;}
+.admin-tabs{gap:6px;}
+.admin-tab{padding:8px 14px;font-size:12px;border-radius:30px;}
+.admin-panel{padding:14px;border-radius:14px;}
+.admin-table{min-width:600px;font-size:13px;}
+.admin-table th,.admin-table td{padding:10px;}
+.stat-card{padding:20px;}
+.stat-value{font-size:26px;}
+.product-form-actions{flex-direction:column;gap:10px;}
+.product-form-actions .btn{width:100%;}
+.live-bar{flex-direction:column;gap:10px;align-items:flex-start;}
+.connect-printer-btn{width:calc(100% - 20px);left:10px;right:10px;bottom:14px;padding:12px 16px;font-size:12px;}
+.btn{font-size:13px;padding:12px 20px;}
+.status-pill{font-size:11px;padding:4px 10px;}
+.print-order-btn{font-size:11px;padding:6px 10px;}
+}
+  </style>
+
+  <header class="admin-header">
+    <div class="brand">
+      <span class="mark">℞</span>
+      <div>
+        <div>Rajeshwari Medical <span class="admin-tag">/ Admin</span></div>
+        <div class="tag">& General Stores</div>
+      </div>
+    </div>
+    <div class="admin-header-right">
+      <span class="admin-pill">Admin</span>
+      <button type="button" class="link" id="admin-logout-btn">⏻ Logout</button>
+    </div>
+  </header>
+
+  <div class="admin-wrap">
+
+    <nav class="admin-tabs" id="admin-tabs">
+      <button type="button" class="admin-tab active" data-tab="stats">Stats</button>
+      <button type="button" class="admin-tab" data-tab="orders">Orders</button>
+      <button type="button" class="admin-tab" data-tab="products">Products</button>
+      <button type="button" class="admin-tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <p id="admin-backend-warning" class="backend-warning" hidden></p>
+
+    <section class="admin-panel" id="panel-stats">
+      <div class="stat-grid">
+        <div class="stat-card">
+          <p class="stat-label">Total orders</p>
+          <p class="stat-value" id="stat-total-orders">—</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Pending orders</p>
+          <p class="stat-value" id="stat-pending-orders">—</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Fulfilled orders</p>
+          <p class="stat-value" id="stat-fulfilled-orders">—</p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-label">Total revenue</p>
+          <p class="stat-value" id="stat-total-revenue">—</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-orders" hidden>
+      <div class="live-bar">
+        <span class="live-label"><span class="live-dot" id="live-dot"></span> <span id="live-text">Site LIVE</span></span>
+        <label class="switch">
+          <input type="checkbox" id="site-live-toggle" checked />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+
+      <p class="admin-section-title" id="orders-count-title">All recent orders (0 total)</p>
+
+      <div class="table-scroll">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Order ID</th>
+              <th>When</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Items</th>
+              <th>Total</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="orders-table-body">
+            <tr><td colspan="8" class="admin-empty">Loading orders…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-products" hidden>
+      <form id="product-form" class="product-form">
+        <input type="hidden" id="p-id" />
+        <div class="product-form-grid">
+          <div>
+            <label for="p-name">Name</label>
+            <input type="text" id="p-name" class="text-field" required placeholder="e.g. Paracetamol 500mg" />
+          </div>
+          <div>
+            <label for="p-category">Category</label>
+            <input type="text" id="p-category" class="text-field" placeholder="e.g. Tablets" />
+          </div>
+          <div>
+            <label for="p-price">Price (₹)</label>
+            <input type="number" id="p-price" class="text-field" required min="0" step="0.01" placeholder="0.00" />
+          </div>
+          <div>
+            <label for="p-stock">Stock</label>
+            <input type="number" id="p-stock" class="text-field" required min="0" step="1" placeholder="0" />
+          </div>
+          <div class="product-form-wide">
+            <label for="p-image">Image URL (optional)</label>
+            <input type="url" id="p-image" class="text-field" placeholder="https://…" />
+          </div>
+        </div>
+        <div class="product-form-actions">
+          <button type="submit" class="btn btn-primary" id="product-submit-btn">Add Product</button>
+          <button type="button" class="btn btn-ghost" id="product-cancel-btn" hidden>Cancel Edit</button>
+        </div>
+        <p id="product-form-error" class="error-text" hidden></p>
+      </form>
+
+      <p class="admin-section-title">Catalog</p>
+      <div class="table-scroll">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Category</th>
+              <th>Price</th>
+              <th>Stock</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="products-table-body">
+            <tr><td colspan="5" class="admin-empty">Loading products…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-panel" id="panel-settings" hidden>
+      <div class="live-bar">
+        <span class="live-label"><span class="live-dot" id="live-dot-2"></span> <span id="live-text-2">Site LIVE</span></span>
+        <label class="switch">
+          <input type="checkbox" id="site-live-toggle-2" checked />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <p class="settings-note">Turning this off shows customers a "closed" message instead of the shop when they log in. Toggling it here updates instantly for everyone.</p>
+    </section>
+
+  </div>
+
+  <button type="button" class="connect-printer-btn" id="connect-printer-btn">
+    🖶 Connect Printer
+  </button>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
