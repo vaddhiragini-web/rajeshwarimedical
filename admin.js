@@ -445,6 +445,9 @@ const pPrice = document.getElementById("p-price");
 const pStock = document.getElementById("p-stock");
 const pBatch = document.getElementById("p-batch");
 const pExpiry = document.getElementById("p-expiry");
+const pBarcode = document.getElementById("p-barcode");
+const pQtyReceived = document.getElementById("p-qty-received");
+const pQtyReceivedApplyBtn = document.getElementById("p-qty-received-apply-btn");
 const pImage = document.getElementById("p-image");
 
 const pImageFile = document.getElementById("p-image-file");
@@ -584,6 +587,7 @@ function renderProducts() {
       pStock.value = p.stock ?? "";
       pBatch.value = p.batch_number || "";
       pExpiry.value = p.expiry_date || "";
+      pBarcode.value = p.barcode || "";
       pImage.value = p.image_url || "";
       productSubmitBtn.textContent = "Save Changes";
       productCancelBtn.hidden = false;
@@ -617,6 +621,7 @@ if (productForm) {
       stock: Number(pStock.value),
       batch_number: pBatch.value.trim(),
       expiry_date: pExpiry.value || null,
+      barcode: pBarcode.value.trim() || null,
       image_url: pImage.value.trim() || null,
     };
 
@@ -685,6 +690,181 @@ function resetProductForm() {
   productCancelBtn.hidden = true;
   productFormError.hidden = true;
   resetProductImageUpload();
+}
+
+if (pQtyReceivedApplyBtn) {
+  pQtyReceivedApplyBtn.addEventListener("click", () => {
+    const received = Number(pQtyReceived.value);
+    if (!received || received <= 0) {
+      alert("Enter a valid quantity received first.");
+      return;
+    }
+    const current = Number(pStock.value) || 0;
+    pStock.value = current + received;
+    pQtyReceived.value = "";
+  });
+}
+
+// ---- Barcode CSV catalog (re-uploaded each session, not stored on the server) ----
+let barcodeCatalog = new Map();
+
+function normalizeBarcode(code) {
+  return String(code || "").trim();
+}
+
+const barcodeCsvInput = document.getElementById("barcode-csv-input");
+const barcodeCsvStatus = document.getElementById("barcode-csv-status");
+
+if (barcodeCsvInput) {
+  barcodeCsvInput.addEventListener("change", () => {
+    const file = barcodeCsvInput.files && barcodeCsvInput.files[0];
+    if (!file) return;
+
+    if (!window.Papa) {
+      barcodeCsvStatus.hidden = false;
+      barcodeCsvStatus.textContent = "CSV parser didn't load — check your internet connection and try again.";
+      return;
+    }
+
+    window.Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        barcodeCatalog = new Map();
+        (results.data || []).forEach((row) => {
+          const normalizedRow = {};
+          Object.keys(row).forEach((key) => {
+            normalizedRow[key.trim().toLowerCase()] = (row[key] ?? "").toString().trim();
+          });
+          const barcode = normalizeBarcode(normalizedRow.barcode);
+          if (!barcode) return;
+          barcodeCatalog.set(barcode, {
+            name: normalizedRow.name || "",
+            category: normalizedRow.category || "",
+            price: normalizedRow.price || "",
+            batch_number: normalizedRow.batch_number || normalizedRow.batch || "",
+            expiry_date: normalizedRow.expiry_date || normalizedRow.expiry || "",
+            image_url: normalizedRow.image_url || normalizedRow.image || "",
+          });
+        });
+        barcodeCsvStatus.hidden = false;
+        barcodeCsvStatus.textContent = `Loaded ${barcodeCatalog.size} barcode(s) from CSV for this session.`;
+      },
+      error: (err) => {
+        barcodeCsvStatus.hidden = false;
+        barcodeCsvStatus.textContent = "Couldn't read CSV: " + err.message;
+      },
+    });
+  });
+}
+
+// ---- Camera barcode scanning ----
+const scanBarcodeBtn = document.getElementById("scan-barcode-btn");
+const barcodeScannerWrap = document.getElementById("barcode-scanner-wrap");
+const barcodeScannerCancelBtn = document.getElementById("barcode-scanner-cancel-btn");
+const barcodeScanStatus = document.getElementById("barcode-scan-status");
+let html5QrScanner = null;
+
+if (scanBarcodeBtn) {
+  scanBarcodeBtn.addEventListener("click", startBarcodeScan);
+}
+if (barcodeScannerCancelBtn) {
+  barcodeScannerCancelBtn.addEventListener("click", stopBarcodeScan);
+}
+
+async function startBarcodeScan() {
+  if (!window.Html5Qrcode) {
+    showBarcodeScanStatus("Barcode scanner library didn't load — check your internet connection and try again.");
+    return;
+  }
+
+  barcodeScanStatus.hidden = true;
+  barcodeScannerWrap.hidden = false;
+
+  html5QrScanner = new Html5Qrcode("barcode-scanner-region");
+  try {
+    await html5QrScanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 260, height: 160 } },
+      (decodedText) => handleBarcodeScanned(decodedText),
+      () => {} // ignore per-frame "no barcode found" noise
+    );
+  } catch (err) {
+    barcodeScannerWrap.hidden = true;
+    showBarcodeScanStatus(
+      "Couldn't access the camera: " + err.message + " — make sure you're on HTTPS and allow camera permission when prompted."
+    );
+  }
+}
+
+async function stopBarcodeScan() {
+  if (html5QrScanner) {
+    try {
+      await html5QrScanner.stop();
+      html5QrScanner.clear();
+    } catch (err) {
+      console.error("Scanner stop failed:", err);
+    }
+    html5QrScanner = null;
+  }
+  barcodeScannerWrap.hidden = true;
+}
+
+function showBarcodeScanStatus(msg) {
+  if (!barcodeScanStatus) return;
+  barcodeScanStatus.hidden = false;
+  barcodeScanStatus.textContent = msg;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function handleBarcodeScanned(code) {
+  stopBarcodeScan();
+  const barcode = normalizeBarcode(code);
+
+  // 1) Already-saved product with this barcode — treat as a restock.
+  const existing = allProducts.find((p) => p.barcode && normalizeBarcode(p.barcode) === barcode);
+  if (existing) {
+    pIdField.value = existing.id;
+    pName.value = existing.name || "";
+    pCategory.value = existing.category || "";
+    pPrice.value = existing.price ?? "";
+    pStock.value = existing.stock ?? "";
+    pBatch.value = existing.batch_number || "";
+    pExpiry.value = existing.expiry_date || "";
+    pBarcode.value = barcode;
+    pImage.value = existing.image_url || "";
+    productSubmitBtn.textContent = "Save Changes";
+    productCancelBtn.hidden = false;
+    showBarcodeScanStatus(
+      `✅ Matched existing product "${existing.name}" — current stock is ${existing.stock}. Enter "Qty Received" and click "+ Add" to update Stock, then Save.`
+    );
+    if (pQtyReceived) pQtyReceived.focus();
+    return;
+  }
+
+  // 2) Not saved yet — try the uploaded CSV.
+  const csvEntry = barcodeCatalog.get(barcode);
+  resetProductForm();
+
+  if (csvEntry) {
+    pBarcode.value = barcode;
+    pName.value = csvEntry.name || "";
+    pCategory.value = csvEntry.category || "";
+    pPrice.value = csvEntry.price || "";
+    pBatch.value = csvEntry.batch_number || "";
+    pExpiry.value = csvEntry.expiry_date || "";
+    pImage.value = csvEntry.image_url || "";
+    showBarcodeScanStatus(`✅ Found "${csvEntry.name || barcode}" in your CSV — details filled in. Just enter the Stock quantity and Save.`);
+    pStock.focus();
+    return;
+  }
+
+  // 3) Unknown barcode — let them fill in manually; it'll be remembered from now on.
+  pBarcode.value = barcode;
+  showBarcodeScanStatus(
+    `⚠️ Barcode ${barcode} wasn't found in your CSV or saved products. Fill in the details manually — next time you scan it, it'll autofill.`
+  );
+  pName.focus();
 }
 
 const liveToggles = [
