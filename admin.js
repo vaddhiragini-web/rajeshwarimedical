@@ -78,6 +78,8 @@ async function initBackend() {
       query: firestoreMod.query,
       orderBy: firestoreMod.orderBy,
       updateDoc: firestoreMod.updateDoc,
+      deleteDoc: firestoreMod.deleteDoc,
+      writeBatch: firestoreMod.writeBatch,
     };
   } catch (err) {
     console.error("Firebase init failed:", err);
@@ -347,6 +349,55 @@ function downloadOrdersCSV() {
 const downloadOrdersCsvBtn = document.getElementById("download-orders-csv-btn");
 if (downloadOrdersCsvBtn) {
   downloadOrdersCsvBtn.addEventListener("click", downloadOrdersCSV);
+}
+
+const deleteAllOrdersBtn = document.getElementById("delete-all-orders-btn");
+if (deleteAllOrdersBtn) {
+  deleteAllOrdersBtn.addEventListener("click", deleteAllOrders);
+}
+
+async function deleteAllOrders() {
+  if (!db || !firebaseFns) {
+    alert("Orders aren't connected right now — try again in a moment.");
+    return;
+  }
+  if (allOrders.length === 0) {
+    alert("There are no orders to delete.");
+    return;
+  }
+
+  const firstConfirm = confirm(
+    `This will permanently delete all ${allOrders.length} order(s). This cannot be undone. Continue?`
+  );
+  if (!firstConfirm) return;
+
+  const typed = prompt('Type DELETE to confirm permanently deleting all orders.');
+  if (typed !== "DELETE") {
+    alert("Delete cancelled — text didn't match.");
+    return;
+  }
+
+  deleteAllOrdersBtn.disabled = true;
+  deleteAllOrdersBtn.textContent = "Deleting…";
+
+  try {
+    const ids = allOrders.map((o) => o.id);
+    const BATCH_LIMIT = 450; // stay under Firestore's 500-write batch cap
+    for (let i = 0; i < ids.length; i += BATCH_LIMIT) {
+      const chunk = ids.slice(i, i + BATCH_LIMIT);
+      const batch = firebaseFns.writeBatch(db);
+      chunk.forEach((id) => {
+        batch.delete(firebaseFns.doc(db, "orders", id));
+      });
+      await batch.commit();
+    }
+    alert("All orders deleted.");
+  } catch (err) {
+    alert("Couldn't delete all orders: " + err.message);
+  } finally {
+    deleteAllOrdersBtn.disabled = false;
+    deleteAllOrdersBtn.textContent = "🗑 Delete All Orders";
+  }
 }
 
 function renderStats() {
