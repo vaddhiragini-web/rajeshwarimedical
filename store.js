@@ -105,6 +105,7 @@ const placeOrderBtn = document.getElementById("place-order-btn");
 
 const confirmOrderIdEl = document.getElementById("confirm-order-id");
 const printReceiptBtn = document.getElementById("print-receipt-btn");
+const whatsappShareBtn = document.getElementById("whatsapp-share-btn");
 const confirmContinueBtn = document.getElementById("confirm-continue-btn");
 
 let lastPlacedOrder = null;
@@ -696,6 +697,7 @@ placeOrderBtn.addEventListener("click", async () => {
 
     confirmOrderIdEl.textContent = docRef.id.slice(0, 8).toUpperCase();
     showCartStep("confirmation");
+    shareViaWhatsApp(lastPlacedOrder);
   } catch (err) {
     deliveryError.textContent = "Couldn't place order: " + err.message;
     deliveryError.hidden = false;
@@ -715,6 +717,58 @@ printReceiptBtn.addEventListener("click", () => {
   if (!lastPlacedOrder) return;
   printReceipt(lastPlacedOrder);
 });
+
+if (whatsappShareBtn) {
+  whatsappShareBtn.addEventListener("click", () => {
+    if (!lastPlacedOrder) return;
+    shareViaWhatsApp(lastPlacedOrder);
+  });
+}
+
+function buildWhatsAppBillText(order) {
+  const shortId = order.id.slice(0, 8).toUpperCase();
+  const d = order.deliveryDetails || {};
+
+  const lines = [];
+  lines.push("🧾 *Rajeshwari Medical & General Stores*");
+  if (currentDlNumber) lines.push(`DL No: ${currentDlNumber}`);
+  lines.push("");
+  lines.push(`Order ID: *${shortId}*`);
+  lines.push(`Name: ${order.customerName || "-"}`);
+  lines.push("");
+
+  if (Array.isArray(order.items) && order.items.length) {
+    lines.push("*Items:*");
+    order.items.forEach((i) => {
+      const batchBit = i.batchNumber ? ` (Batch ${i.batchNumber}${i.expiryDate ? `, Exp ${formatExpiryShort(i.expiryDate)}` : ""})` : "";
+      lines.push(`• ${i.name} x${i.qty} — ₹${Number(i.qty * i.price).toFixed(2)}${batchBit}`);
+    });
+    lines.push("");
+  } else if (order.attachment) {
+    lines.push("Order placed via attached file (no listed items).");
+    lines.push("");
+  }
+
+  lines.push(`*Total: ₹${Number(order.total || 0).toFixed(2)}*`);
+  lines.push("");
+  lines.push("*Delivery to:*");
+  lines.push(`${d.flat || "-"}, ${d.street || "-"}`);
+  lines.push(`${d.landmark || "-"}, ${d.mandal || "-"}, ${d.district || "-"}`);
+  if (d.note) lines.push(`Note: ${d.note}`);
+  lines.push("");
+  lines.push("Thank you for shopping with us! 🙏");
+
+  return lines.join("\n");
+}
+
+function shareViaWhatsApp(order) {
+  const phoneDigits = String(order.customerPhone || "").replace(/\D/g, "");
+  if (!phoneDigits) return;
+  const fullNumber = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+  const text = encodeURIComponent(buildWhatsAppBillText(order));
+  const url = `https://wa.me/${fullNumber}?text=${text}`;
+  window.open(url, "_blank", "noopener");
+}
 
 function formatExpiryShort(dateStr) {
   if (!dateStr) return "";
