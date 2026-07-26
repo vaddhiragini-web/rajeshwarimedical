@@ -80,6 +80,13 @@ label{display:block;margin-bottom:8px;font-weight:600;}
 
 .admin-empty{text-align:center;padding:35px;color:#888;}
 
+.scan-card{background:linear-gradient(135deg,#f5faf7,#eaf6ef);border:1px solid var(--border);border-radius:18px;padding:24px;margin-bottom:25px;}
+.scan-controls{display:flex;gap:15px;align-items:end;flex-wrap:wrap;margin-bottom:12px;}
+#barcode-scanner-wrap{margin-top:15px;}
+#barcode-scanner-region{max-width:420px;margin:0 auto;border-radius:14px;overflow:hidden;box-shadow:var(--shadow);}
+#barcode-scanner-region video{width:100%;border-radius:14px;}
+.qty-received-field label{display:block;}
+
 .print-order-btn{display:block;width:100%;margin-top:8px;font-size:12px;padding:8px 12px;}
 
 .attachment-link{font-size:12px;color:#0a7d3c;text-decoration:none;}
@@ -211,6 +218,26 @@ label{display:block;margin-bottom:8px;font-weight:600;}
     </section>
 
     <section class="admin-panel" id="panel-products" hidden>
+
+      <div class="scan-card">
+        <p class="admin-section-title" style="margin-top:0;">📷 Scan Barcode to Add / Restock</p>
+        <p class="field-hint">Upload your barcode CSV once per session (columns: <code>barcode, name, category, price, batch_number, expiry_date, image_url</code>), then scan — details fill in automatically and you just type the quantity. Products you've already saved are matched by barcode automatically, even without the CSV.</p>
+        <div class="scan-controls">
+          <div style="max-width:320px;flex:1;">
+            <label for="barcode-csv-input">Barcode CSV (optional)</label>
+            <input type="file" id="barcode-csv-input" class="file-input" accept=".csv" />
+          </div>
+          <button type="button" class="btn btn-primary" id="scan-barcode-btn">📷 Scan Barcode</button>
+        </div>
+        <p id="barcode-csv-status" class="field-hint" hidden></p>
+
+        <div id="barcode-scanner-wrap" hidden>
+          <div id="barcode-scanner-region"></div>
+          <button type="button" class="btn btn-ghost" id="barcode-scanner-cancel-btn" style="margin-top:10px;">Cancel Scan</button>
+        </div>
+        <p id="barcode-scan-status" class="field-hint" hidden></p>
+      </div>
+
       <form id="product-form" class="product-form">
         <input type="hidden" id="p-id" />
         <div class="product-form-grid">
@@ -237,6 +264,17 @@ label{display:block;margin-bottom:8px;font-weight:600;}
           <div>
             <label for="p-expiry">Expiry Date</label>
             <input type="date" id="p-expiry" class="text-field" required />
+          </div>
+          <div>
+            <label for="p-barcode">Barcode</label>
+            <input type="text" id="p-barcode" class="text-field" placeholder="Auto-filled by scan, or type manually" />
+          </div>
+          <div class="qty-received-field">
+            <label for="p-qty-received">Qty Received (add to Stock)</label>
+            <div style="display:flex;gap:10px;">
+              <input type="number" id="p-qty-received" class="text-field" min="0" step="1" placeholder="e.g. 50" />
+              <button type="button" class="btn btn-ghost" id="p-qty-received-apply-btn">+ Add</button>
+            </div>
           </div>
           <div class="product-form-wide">
             <label for="p-image">Image URL (optional)</label>
@@ -311,6 +349,8 @@ label{display:block;margin-bottom:8px;font-weight:600;}
   </button>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module" src="admin.js"></script>
 </body>
 </html>
