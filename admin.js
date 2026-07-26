@@ -176,6 +176,7 @@ function renderOrders() {
           <td>
             <select class="status-select text-field">${options}</select>
             <button type="button" class="btn btn-ghost print-order-btn">🖶 Print</button>
+            <button type="button" class="btn btn-ghost whatsapp-order-btn">📱 WhatsApp</button>
           </td>
         </tr>`;
     })
@@ -202,6 +203,71 @@ function renderOrders() {
       if (order) printOrderReceipt(order);
     });
   });
+
+  ordersTableBody.querySelectorAll(".whatsapp-order-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest("tr");
+      const order = allOrders.find((o) => o.id === row.dataset.id);
+      if (order) shareOrderViaWhatsApp(order);
+    });
+  });
+}
+
+function formatExpiryShortForBill(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-IN", { month: "2-digit", year: "numeric" });
+}
+
+function buildWhatsAppBillText(order) {
+  const shortId = order.id.slice(0, 8).toUpperCase();
+  const d = order.deliveryDetails || {};
+
+  const lines = [];
+  lines.push("🧾 *Rajeshwari Medical & General Stores*");
+  if (currentDlNumber) lines.push(`DL No: ${currentDlNumber}`);
+  lines.push("");
+  lines.push(`Order ID: *${shortId}*`);
+  lines.push(`Name: ${order.customerName || "-"}`);
+  lines.push("");
+
+  if (Array.isArray(order.items) && order.items.length) {
+    lines.push("*Items:*");
+    order.items.forEach((i) => {
+      const batchBit = i.batchNumber
+        ? ` (Batch ${i.batchNumber}${i.expiryDate ? `, Exp ${formatExpiryShortForBill(i.expiryDate)}` : ""})`
+        : "";
+      lines.push(`• ${i.name} x${i.qty} — ₹${Number(i.qty * i.price).toFixed(2)}${batchBit}`);
+    });
+    lines.push("");
+  } else if (order.attachment) {
+    lines.push("Order placed via attached file (no listed items).");
+    lines.push("");
+  }
+
+  lines.push(`*Total: ₹${Number(order.total || 0).toFixed(2)}*`);
+  lines.push("");
+  lines.push("*Delivery to:*");
+  lines.push(`${d.flat || "-"}, ${d.street || "-"}`);
+  lines.push(`${d.landmark || "-"}, ${d.mandal || "-"}, ${d.district || "-"}`);
+  if (d.note) lines.push(`Note: ${d.note}`);
+  lines.push("");
+  lines.push("Thank you for shopping with us! 🙏");
+
+  return lines.join("\n");
+}
+
+function shareOrderViaWhatsApp(order) {
+  const phoneDigits = String(order.customerPhone || "").replace(/\D/g, "");
+  if (!phoneDigits) {
+    alert("This order has no customer phone number on file.");
+    return;
+  }
+  const fullNumber = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+  const text = encodeURIComponent(buildWhatsAppBillText(order));
+  const url = `https://wa.me/${fullNumber}?text=${text}`;
+  window.open(url, "_blank", "noopener");
 }
 
 function buildReceiptHTML(order) {
@@ -781,13 +847,28 @@ async function startBarcodeScan() {
   barcodeScanStatus.hidden = true;
   barcodeScannerWrap.hidden = false;
 
-  html5QrScanner = new Html5Qrcode("barcode-scanner-region");
+  html5QrScanner = new Html5Qrcode("barcode-scanner-region", {
+    formatsToSupport: window.Html5QrcodeSupportedFormats
+      ? [
+          Html5QrcodeSupportedFormats.QR_CODE,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.CODABAR,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.DATA_MATRIX,
+        ]
+      : undefined,
+  });
   try {
     await html5QrScanner.start(
       { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 260, height: 160 } },
+      { fps: 10, qrbox: { width: 260, height: 260 } },
       (decodedText) => handleBarcodeScanned(decodedText),
-      () => {} // ignore per-frame "no barcode found" noise
+      () => {} // ignore per-frame "no code found" noise
     );
   } catch (err) {
     barcodeScannerWrap.hidden = true;
