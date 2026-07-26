@@ -181,7 +181,10 @@ label{display:block;margin-bottom:8px;font-weight:600;}
         </label>
       </div>
 
-      <p class="admin-section-title" id="orders-count-title">All recent orders (0 total)</p>
+      <div class="live-bar">
+        <p class="admin-section-title" id="orders-count-title" style="margin:0;">All recent orders (0 total)</p>
+        <button type="button" class="btn btn-primary" id="download-orders-csv-btn">⬇ Download All Orders (CSV)</button>
+      </div>
 
       <div class="table-scroll">
         <table class="admin-table">
@@ -227,6 +230,17 @@ label{display:block;margin-bottom:8px;font-weight:600;}
           <div class="product-form-wide">
             <label for="p-image">Image URL (optional)</label>
             <input type="url" id="p-image" class="text-field" placeholder="https://…" />
+          </div>
+          <div class="product-form-wide">
+            <label for="p-image-file">Or Upload an Image</label>
+            <p class="field-hint">Uploading a file will be used instead of the URL above.</p>
+            <input type="file" id="p-image-file" class="file-input" accept="image/*" />
+            <div id="p-image-preview" class="file-preview" hidden>
+              <span id="p-image-preview-icon">🖼️</span>
+              <span id="p-image-preview-name" class="file-preview-name"></span>
+              <button type="button" id="p-image-remove-btn" class="remove-file-btn" aria-label="Remove image">✕</button>
+            </div>
+            <p id="p-image-upload-status" class="file-upload-status" hidden></p>
           </div>
         </div>
         <div class="product-form-actions">
