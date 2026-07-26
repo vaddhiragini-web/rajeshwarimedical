@@ -211,15 +211,21 @@ function buildReceiptHTML(order) {
 
   const itemRows = (order.items || []).length
     ? order.items
-        .map(
-          (i) =>
-            `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
-        )
+        .map((i) => {
+          const batchLine = i.batchNumber || i.expiryDate
+            ? `<br/><span style="font-size:11px;color:#555;">${i.batchNumber ? `Batch: ${escapeHtml(i.batchNumber)}` : ""}${i.batchNumber && i.expiryDate ? " · " : ""}${i.expiryDate ? `Exp: ${escapeHtml(formatExpiryShort(i.expiryDate))}` : ""}</span>`
+            : "";
+          return `<tr><td>${escapeHtml(i.name)}${batchLine}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`;
+        })
         .join("")
     : `<tr><td colspan="3" style="font-style:italic;">No items listed — see attached file</td></tr>`;
 
   const attachmentLine = order.attachment
     ? `<p class="meta">📎 Attached: ${escapeHtml(order.attachment.name)}</p>`
+    : "";
+
+  const dlLine = currentDlNumber
+    ? `<p class="center meta">DL No: ${escapeHtml(currentDlNumber)}</p>`
     : "";
 
   return `<!DOCTYPE html>
@@ -245,6 +251,7 @@ function buildReceiptHTML(order) {
   <p class="center logo">℞</p>
   <h2 class="center">RAJESHWARI MEDICAL</h2>
   <p class="center meta">&amp; General Stores</p>
+  ${dlLine}
   <p class="center meta">${escapeHtml(placed)}</p>
   <hr/>
   <p>Order ID: <strong>${shortId}</strong></p>
@@ -302,7 +309,14 @@ function ordersToCSV(orders) {
   const rows = orders.map((o) => {
     const when = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "";
     const items = Array.isArray(o.items) && o.items.length
-      ? o.items.map((i) => `${i.name} x${i.qty} (₹${Number(i.qty * i.price).toFixed(2)})`).join("; ")
+      ? o.items
+          .map((i) => {
+            const batchBit = i.batchNumber ? ` [Batch ${i.batchNumber}` : "";
+            const expBit = i.expiryDate ? `${i.batchNumber ? ", " : " ["}Exp ${formatExpiryShort(i.expiryDate)}` : "";
+            const suffix = batchBit || expBit ? `${batchBit}${expBit}]` : "";
+            return `${i.name} x${i.qty} (₹${Number(i.qty * i.price).toFixed(2)})${suffix}`;
+          })
+          .join("; ")
       : o.attachment
       ? "No items — see attachment"
       : "";
@@ -429,6 +443,8 @@ const pName = document.getElementById("p-name");
 const pCategory = document.getElementById("p-category");
 const pPrice = document.getElementById("p-price");
 const pStock = document.getElementById("p-stock");
+const pBatch = document.getElementById("p-batch");
+const pExpiry = document.getElementById("p-expiry");
 const pImage = document.getElementById("p-image");
 
 const pImageFile = document.getElementById("p-image-file");
@@ -504,36 +520,56 @@ let allProducts = [];
 
 async function loadProducts() {
   if (!productsTableBody) return;
-  productsTableBody.innerHTML = `<tr><td colspan="5" class="admin-empty">Loading products…</td></tr>`;
+  productsTableBody.innerHTML = `<tr><td colspan="7" class="admin-empty">Loading products…</td></tr>`;
   const { data, error } = await supabaseClient.from("products").select("*").order("name", { ascending: true });
   if (error) {
-    productsTableBody.innerHTML = `<tr><td colspan="5" class="admin-empty">Couldn't load products: ${escapeHtml(error.message)}</td></tr>`;
+    productsTableBody.innerHTML = `<tr><td colspan="7" class="admin-empty">Couldn't load products: ${escapeHtml(error.message)}</td></tr>`;
     return;
   }
   allProducts = data || [];
   renderProducts();
 }
 
+function formatExpiry(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function isExpiredOrSoon(dateStr) {
+  if (!dateStr) return { expired: false, soon: false };
+  const expiry = new Date(dateStr + "T00:00:00");
+  const now = new Date();
+  const sixMonths = new Date();
+  sixMonths.setMonth(sixMonths.getMonth() + 6);
+  return { expired: expiry < now, soon: expiry >= now && expiry <= sixMonths };
+}
+
 function renderProducts() {
   if (!productsTableBody) return;
   if (allProducts.length === 0) {
-    productsTableBody.innerHTML = `<tr><td colspan="5" class="admin-empty">No products yet — add one above.</td></tr>`;
+    productsTableBody.innerHTML = `<tr><td colspan="7" class="admin-empty">No products yet — add one above.</td></tr>`;
     return;
   }
   productsTableBody.innerHTML = allProducts
-    .map(
-      (p) => `
+    .map((p) => {
+      const { expired, soon } = isExpiredOrSoon(p.expiry_date);
+      const expiryColor = expired ? "var(--red, #d32f2f)" : soon ? "var(--yellow, #ff9800)" : "inherit";
+      return `
         <tr data-id="${p.id}">
           <td>${escapeHtml(p.name)}</td>
           <td>${escapeHtml(p.category || "—")}</td>
+          <td>${escapeHtml(p.batch_number || "—")}</td>
+          <td style="color:${expiryColor};font-weight:${expired || soon ? "700" : "400"};">${formatExpiry(p.expiry_date)}${expired ? " ⚠️" : ""}</td>
           <td>₹${Number(p.price).toFixed(2)}</td>
           <td>${p.stock}</td>
           <td>
             <button type="button" class="btn btn-ghost edit-product-btn">Edit</button>
             <button type="button" class="btn btn-ghost delete-product-btn">Delete</button>
           </td>
-        </tr>`
-    )
+        </tr>`;
+    })
     .join("");
 
   productsTableBody.querySelectorAll(".edit-product-btn").forEach((btn) => {
@@ -546,6 +582,8 @@ function renderProducts() {
       pCategory.value = p.category || "";
       pPrice.value = p.price ?? "";
       pStock.value = p.stock ?? "";
+      pBatch.value = p.batch_number || "";
+      pExpiry.value = p.expiry_date || "";
       pImage.value = p.image_url || "";
       productSubmitBtn.textContent = "Save Changes";
       productCancelBtn.hidden = false;
@@ -577,11 +615,25 @@ if (productForm) {
       category: pCategory.value.trim(),
       price: Number(pPrice.value),
       stock: Number(pStock.value),
+      batch_number: pBatch.value.trim(),
+      expiry_date: pExpiry.value || null,
       image_url: pImage.value.trim() || null,
     };
 
     if (!payload.name || isNaN(payload.price) || isNaN(payload.stock)) {
       productFormError.textContent = "Please fill in name, price, and stock correctly.";
+      productFormError.hidden = false;
+      return;
+    }
+
+    if (!payload.batch_number) {
+      productFormError.textContent = "Please enter a batch number.";
+      productFormError.hidden = false;
+      return;
+    }
+
+    if (!payload.expiry_date) {
+      productFormError.textContent = "Please enter an expiry date.";
       productFormError.hidden = false;
       return;
     }
@@ -640,14 +692,29 @@ const liveToggles = [
   { checkbox: document.getElementById("site-live-toggle-2"), dot: document.getElementById("live-dot-2"), text: document.getElementById("live-text-2") },
 ];
 
+let currentDlNumber = "";
+
 async function loadSiteLiveState() {
-  const { data, error } = await supabaseClient.from("store_settings").select("is_live").eq("id", 1).single();
+  const { data, error } = await supabaseClient
+    .from("store_settings")
+    .select("is_live, dl_number")
+    .eq("id", 1)
+    .single();
   if (error) {
     console.error("store_settings load failed:", error.message);
-    showBackendWarning('Site-live toggle needs a "store_settings" table (id, is_live) in Supabase — see admin.js for the create-table snippet.');
+    showBackendWarning('Site-live toggle needs a "store_settings" table (id, is_live, dl_number) in Supabase — see admin.js for the create-table snippet.');
     return;
   }
   applyLiveState(!!data.is_live);
+  currentDlNumber = data.dl_number || "";
+  applyDlNumber(currentDlNumber);
+}
+
+function applyDlNumber(value) {
+  const currentEl = document.getElementById("dl-number-current");
+  const inputEl = document.getElementById("dl-number-input");
+  if (currentEl) currentEl.textContent = value || "Not set";
+  if (inputEl && document.activeElement !== inputEl) inputEl.value = value || "";
 }
 
 function applyLiveState(isLive) {
@@ -671,6 +738,33 @@ liveToggles.forEach(({ checkbox }) => {
   });
 });
 
+const dlNumberSaveBtn = document.getElementById("dl-number-save-btn");
+const dlNumberInput = document.getElementById("dl-number-input");
+const dlNumberStatus = document.getElementById("dl-number-status");
+
+if (dlNumberSaveBtn) {
+  dlNumberSaveBtn.addEventListener("click", async () => {
+    const value = dlNumberInput.value.trim();
+    dlNumberSaveBtn.disabled = true;
+    const { error } = await supabaseClient.from("store_settings").upsert({ id: 1, dl_number: value });
+    dlNumberSaveBtn.disabled = false;
+
+    if (dlNumberStatus) {
+      dlNumberStatus.hidden = false;
+      if (error) {
+        dlNumberStatus.textContent = "Couldn't save DL number: " + error.message;
+      } else {
+        currentDlNumber = value;
+        applyDlNumber(value);
+        dlNumberStatus.textContent = "Saved.";
+        setTimeout(() => {
+          dlNumberStatus.hidden = true;
+        }, 2500);
+      }
+    }
+  });
+}
+
 const connectPrinterBtn = document.getElementById("connect-printer-btn");
 if (connectPrinterBtn) {
   connectPrinterBtn.addEventListener("click", async () => {
@@ -688,6 +782,13 @@ if (connectPrinterBtn) {
       console.log("Printer pairing cancelled/failed:", err.message);
     }
   });
+}
+
+function formatExpiryShort(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-IN", { month: "2-digit", year: "numeric" });
 }
 
 function escapeHtml(str) {
