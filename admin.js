@@ -270,6 +270,82 @@ function printOrderReceipt(order) {
   setTimeout(() => printWindow.print(), 300);
 }
 
+function csvEscape(val) {
+  const s = String(val ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function ordersToCSV(orders) {
+  const headers = [
+    "Order ID",
+    "Date",
+    "Customer Name",
+    "Phone",
+    "Items",
+    "Total",
+    "Status",
+    "Street",
+    "Landmark",
+    "Mandal",
+    "District",
+    "Flat/House No.",
+    "Alt Phone",
+    "Packing Note",
+    "Attachment",
+  ];
+
+  const rows = orders.map((o) => {
+    const when = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "";
+    const items = Array.isArray(o.items) && o.items.length
+      ? o.items.map((i) => `${i.name} x${i.qty} (₹${Number(i.qty * i.price).toFixed(2)})`).join("; ")
+      : o.attachment
+      ? "No items — see attachment"
+      : "";
+    const d = o.deliveryDetails || {};
+    return [
+      o.id,
+      when,
+      o.customerName || "",
+      o.customerPhone || "",
+      items,
+      Number(o.total || 0).toFixed(2),
+      o.status || "pending",
+      d.street || "",
+      d.landmark || "",
+      d.mandal || "",
+      d.district || "",
+      d.flat || "",
+      d.altPhone || "",
+      d.note || "",
+      o.attachment ? o.attachment.url : "",
+    ];
+  });
+
+  return [headers, ...rows].map((row) => row.map(csvEscape).join(",")).join("\r\n");
+}
+
+function downloadOrdersCSV() {
+  if (allOrders.length === 0) {
+    alert("There are no orders to download yet.");
+    return;
+  }
+  const csv = ordersToCSV(allOrders);
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `orders_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+const downloadOrdersCsvBtn = document.getElementById("download-orders-csv-btn");
+if (downloadOrdersCsvBtn) {
+  downloadOrdersCsvBtn.addEventListener("click", downloadOrdersCSV);
+}
+
 function renderStats() {
   const total = allOrders.length;
   const pending = allOrders.filter((o) => (o.status || "pending") === "pending").length;
@@ -300,6 +376,75 @@ const pCategory = document.getElementById("p-category");
 const pPrice = document.getElementById("p-price");
 const pStock = document.getElementById("p-stock");
 const pImage = document.getElementById("p-image");
+
+const pImageFile = document.getElementById("p-image-file");
+const pImagePreview = document.getElementById("p-image-preview");
+const pImagePreviewName = document.getElementById("p-image-preview-name");
+const pImageRemoveBtn = document.getElementById("p-image-remove-btn");
+const pImageUploadStatus = document.getElementById("p-image-upload-status");
+let selectedProductImageFile = null;
+
+const PRODUCT_IMAGES_BUCKET = "product-images";
+
+if (pImageFile) {
+  pImageFile.addEventListener("change", () => {
+    const file = pImageFile.files && pImageFile.files[0];
+    if (!file) return;
+
+    const MAX_BYTES = 8 * 1024 * 1024;
+    if (file.size > MAX_BYTES) {
+      productFormError.textContent = "That image is too large (max 8 MB). Please choose a smaller file.";
+      productFormError.hidden = false;
+      pImageFile.value = "";
+      return;
+    }
+
+    selectedProductImageFile = file;
+    pImagePreviewName.textContent = file.name;
+    pImagePreview.hidden = false;
+  });
+}
+
+if (pImageRemoveBtn) {
+  pImageRemoveBtn.addEventListener("click", () => {
+    selectedProductImageFile = null;
+    pImageFile.value = "";
+    pImagePreview.hidden = true;
+  });
+}
+
+function resetProductImageUpload() {
+  selectedProductImageFile = null;
+  if (pImageFile) pImageFile.value = "";
+  if (pImagePreview) pImagePreview.hidden = true;
+  if (pImageUploadStatus) {
+    pImageUploadStatus.hidden = true;
+    pImageUploadStatus.textContent = "";
+  }
+}
+
+async function uploadProductImage(file) {
+  if (!supabaseClient) {
+    throw new Error("Image storage isn't connected right now — try again in a moment.");
+  }
+
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${Date.now()}_${safeName}`;
+
+  const { error: uploadError } = await supabaseClient.storage
+    .from(PRODUCT_IMAGES_BUCKET)
+    .upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new Error(`Couldn't upload image: ${uploadError.message}`);
+  }
+
+  const { data: urlData } = supabaseClient.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(path);
+  return urlData.publicUrl;
+}
 
 let allProducts = [];
 
@@ -388,6 +533,22 @@ if (productForm) {
     }
 
     productSubmitBtn.disabled = true;
+
+    if (selectedProductImageFile) {
+      try {
+        pImageUploadStatus.hidden = false;
+        pImageUploadStatus.textContent = "Uploading image…";
+        payload.image_url = await uploadProductImage(selectedProductImageFile);
+        pImageUploadStatus.textContent = "Image uploaded.";
+      } catch (err) {
+        productSubmitBtn.disabled = false;
+        productFormError.textContent = err.message;
+        productFormError.hidden = false;
+        pImageUploadStatus.hidden = true;
+        return;
+      }
+    }
+
     const editingId = pIdField.value;
 
     const { error } = editingId
@@ -417,6 +578,7 @@ function resetProductForm() {
   productSubmitBtn.textContent = "Add Product";
   productCancelBtn.hidden = true;
   productFormError.hidden = true;
+  resetProductImageUpload();
 }
 
 const liveToggles = [
