@@ -183,7 +183,10 @@ label{display:block;margin-bottom:8px;font-weight:600;}
 
       <div class="live-bar">
         <p class="admin-section-title" id="orders-count-title" style="margin:0;">All recent orders (0 total)</p>
-        <button type="button" class="btn btn-primary" id="download-orders-csv-btn">⬇ Download All Orders (CSV)</button>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary" id="download-orders-csv-btn">⬇ Download All Orders (CSV)</button>
+          <button type="button" class="btn btn-ghost" id="delete-all-orders-btn">🗑 Delete All Orders</button>
+        </div>
       </div>
 
       <div class="table-scroll">
