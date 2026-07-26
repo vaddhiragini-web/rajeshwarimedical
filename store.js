@@ -502,6 +502,41 @@ async function uploadAttachment(file, phone) {
   };
 }
 
+async function deductStock(items) {
+  if (!supabaseClient || !items || items.length === 0) return;
+
+  await Promise.all(
+    items.map(async (item) => {
+      try {
+        // Re-fetch the current stock right before writing, so we deduct from
+        // the latest value rather than whatever was cached on the page.
+        const { data, error: fetchError } = await supabaseClient
+          .from("products")
+          .select("stock")
+          .eq("id", item.productId)
+          .single();
+
+        if (fetchError || !data) {
+          console.error(`Couldn't read stock for product ${item.productId}:`, fetchError?.message);
+          return;
+        }
+
+        const newStock = Math.max(0, Number(data.stock) - Number(item.qty));
+        const { error: updateError } = await supabaseClient
+          .from("products")
+          .update({ stock: newStock })
+          .eq("id", item.productId);
+
+        if (updateError) {
+          console.error(`Couldn't update stock for product ${item.productId}:`, updateError.message);
+        }
+      } catch (err) {
+        console.error(`Stock deduction failed for product ${item.productId}:`, err.message);
+      }
+    })
+  );
+}
+
 function formatFileSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -632,9 +667,11 @@ placeOrderBtn.addEventListener("click", async () => {
       placedAt: new Date(),
     };
 
+    await deductStock(items);
+
     setCart({});
     renderCartFromStorage();
-    renderGrid(allProducts);
+    await loadProducts();
     deliveryForm.reset();
     resetFileUpload();
 
