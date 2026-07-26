@@ -116,6 +116,19 @@ const ordersDrawer = document.getElementById("orders-drawer");
 const ordersBody = document.getElementById("orders-body");
 
 let allProducts = [];
+let currentDlNumber = "";
+
+async function loadDlNumber() {
+  if (!supabaseClient) return;
+  const { data, error } = await supabaseClient
+    .from("store_settings")
+    .select("dl_number")
+    .eq("id", 1)
+    .single();
+  if (!error && data) {
+    currentDlNumber = data.dl_number || "";
+  }
+}
 
 let db = null;
 let supabaseClient = null;
@@ -180,6 +193,7 @@ function enterShop(session) {
   userChip.textContent = session.name || session.phone;
   renderCartFromStorage();
   loadProducts();
+  loadDlNumber();
 }
 
 logoutBtn.addEventListener("click", () => {
@@ -248,6 +262,7 @@ async function initBackend() {
 
   if (supabaseClient && !shopScreen.hidden) {
     loadProducts();
+    loadDlNumber();
   }
 }
 
@@ -363,6 +378,8 @@ function changeQty(productId, delta) {
       name: product.name,
       price: product.price,
       image_url: product.image_url || FALLBACK_IMAGE,
+      batch_number: product.batch_number || "",
+      expiry_date: product.expiry_date || "",
     };
   }
   setCart(cart);
@@ -622,6 +639,8 @@ placeOrderBtn.addEventListener("click", async () => {
     name: item.name,
     qty: item.qty,
     price: item.price,
+    batchNumber: item.batch_number || "",
+    expiryDate: item.expiry_date || "",
   }));
   const total = items.reduce((sum, i) => sum + i.qty * i.price, 0);
 
@@ -697,6 +716,13 @@ printReceiptBtn.addEventListener("click", () => {
   printReceipt(lastPlacedOrder);
 });
 
+function formatExpiryShort(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-IN", { month: "2-digit", year: "numeric" });
+}
+
 function buildReceiptHTML(order) {
   const placed = (order.placedAt instanceof Date ? order.placedAt : new Date()).toLocaleString();
   const shortId = order.id.slice(0, 8).toUpperCase();
@@ -704,15 +730,21 @@ function buildReceiptHTML(order) {
 
   const itemRows = (order.items || []).length
     ? order.items
-        .map(
-          (i) =>
-            `<tr><td>${escapeHtml(i.name)}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`
-        )
+        .map((i) => {
+          const batchLine = i.batchNumber || i.expiryDate
+            ? `<br/><span style="font-size:11px;color:#555;">${i.batchNumber ? `Batch: ${escapeHtml(i.batchNumber)}` : ""}${i.batchNumber && i.expiryDate ? " · " : ""}${i.expiryDate ? `Exp: ${escapeHtml(formatExpiryShort(i.expiryDate))}` : ""}</span>`
+            : "";
+          return `<tr><td>${escapeHtml(i.name)}${batchLine}</td><td class="r">${i.qty}</td><td class="r">₹${Number(i.qty * i.price).toFixed(2)}</td></tr>`;
+        })
         .join("")
     : `<tr><td colspan="3" style="font-style:italic;">No items listed — see attached file</td></tr>`;
 
   const attachmentLine = order.attachment
     ? `<p class="meta">📎 Attached: ${escapeHtml(order.attachment.name)}</p>`
+    : "";
+
+  const dlLine = currentDlNumber
+    ? `<p class="center meta">DL No: ${escapeHtml(currentDlNumber)}</p>`
     : "";
 
   return `<!DOCTYPE html>
@@ -738,6 +770,7 @@ function buildReceiptHTML(order) {
   <p class="center logo">℞</p>
   <h2 class="center">RAJESHWARI MEDICAL</h2>
   <p class="center meta">&amp; General Stores</p>
+  ${dlLine}
   <p class="center meta">${escapeHtml(placed)}</p>
   <hr/>
   <p>Order ID: <strong>${shortId}</strong></p>
