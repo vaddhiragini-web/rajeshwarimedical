@@ -146,8 +146,11 @@ function renderOrders() {
   ordersTableBody.innerHTML = allOrders
     .map((o) => {
       const when = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "Just now";
+      const isImageAttachment = o.attachment && o.attachment.type && o.attachment.type.startsWith("image/");
       const attachmentTag = o.attachment
-        ? `<br/><a href="${o.attachment.url}" target="_blank" rel="noopener" class="attachment-link">📎 ${escapeHtml(o.attachment.name)}</a>`
+        ? isImageAttachment
+          ? `<a href="${o.attachment.url}" target="_blank" rel="noopener"><img src="${o.attachment.url}" alt="${escapeHtml(o.attachment.name)}" class="order-attachment-thumb" /></a>`
+          : `<br/><a href="${o.attachment.url}" target="_blank" rel="noopener" class="attachment-link">📎 ${escapeHtml(o.attachment.name)}</a>`
         : "";
       const itemsSummary =
         Array.isArray(o.items) && o.items.length
