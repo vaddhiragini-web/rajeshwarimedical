@@ -820,6 +820,12 @@ function renderOrders(orders) {
         : "—";
       const placed = o.createdAt && o.createdAt.toDate ? o.createdAt.toDate().toLocaleString() : "Just now";
       const status = o.status || "pending";
+      const isImageAttachment = o.attachment && o.attachment.type && o.attachment.type.startsWith("image/");
+      const attachmentTag = o.attachment
+        ? isImageAttachment
+          ? `<a href="${o.attachment.url}" target="_blank" rel="noopener"><img src="${o.attachment.url}" alt="${escapeHtml(o.attachment.name)}" class="order-attachment-thumb" /></a>`
+          : `<p class="order-items">📎 <a href="${o.attachment.url}" target="_blank" rel="noopener">${escapeHtml(o.attachment.name)}</a></p>`
+        : "";
       return `
         <div class="order-card">
           <div class="order-card-head">
@@ -827,6 +833,7 @@ function renderOrders(orders) {
             <span class="status-pill ${status}">${status}</span>
           </div>
           <p class="order-items">${escapeHtml(itemsSummary)}</p>
+          ${attachmentTag}
           <p class="order-meta">${placed}</p>
         </div>`;
     })
