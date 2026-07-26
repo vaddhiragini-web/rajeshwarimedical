@@ -230,6 +230,14 @@ label{display:block;margin-bottom:8px;font-weight:600;}
             <label for="p-stock">Stock</label>
             <input type="number" id="p-stock" class="text-field" required min="0" step="1" placeholder="0" />
           </div>
+          <div>
+            <label for="p-batch">Batch Number</label>
+            <input type="text" id="p-batch" class="text-field" required placeholder="e.g. B24A1123" />
+          </div>
+          <div>
+            <label for="p-expiry">Expiry Date</label>
+            <input type="date" id="p-expiry" class="text-field" required />
+          </div>
           <div class="product-form-wide">
             <label for="p-image">Image URL (optional)</label>
             <input type="url" id="p-image" class="text-field" placeholder="https://…" />
@@ -260,13 +268,15 @@ label{display:block;margin-bottom:8px;font-weight:600;}
             <tr>
               <th>Name</th>
               <th>Category</th>
+              <th>Batch No.</th>
+              <th>Expiry</th>
               <th>Price</th>
               <th>Stock</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="products-table-body">
-            <tr><td colspan="5" class="admin-empty">Loading products…</td></tr>
+            <tr><td colspan="7" class="admin-empty">Loading products…</td></tr>
           </tbody>
         </table>
       </div>
@@ -281,6 +291,17 @@ label{display:block;margin-bottom:8px;font-weight:600;}
         </label>
       </div>
       <p class="settings-note">Turning this off shows customers a "closed" message instead of the shop when they log in. Toggling it here updates instantly for everyone.</p>
+
+      <p class="admin-section-title">🪪 Drug License (DL) Number</p>
+      <p class="settings-note">This number is printed on every customer and admin receipt. Current value: <strong id="dl-number-current">Not set</strong></p>
+      <div style="display:flex;gap:15px;align-items:end;flex-wrap:wrap;">
+        <div style="max-width:320px;flex:1;">
+          <label for="dl-number-input">DL Number</label>
+          <input type="text" id="dl-number-input" class="text-field" placeholder="e.g. TS/MBD/2019-43101" />
+        </div>
+        <button type="button" class="btn btn-primary" id="dl-number-save-btn">💾 Save</button>
+      </div>
+      <p id="dl-number-status" class="field-hint" hidden></p>
     </section>
 
   </div>
