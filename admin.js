@@ -911,17 +911,19 @@ let currentDlNumber = "";
 async function loadSiteLiveState() {
   const { data, error } = await supabaseClient
     .from("store_settings")
-    .select("is_live, dl_number")
+    .select("is_live, dl_number, contact_phone, whatsapp_share_enabled")
     .eq("id", 1)
     .single();
   if (error) {
     console.error("store_settings load failed:", error.message);
-    showBackendWarning('Site-live toggle needs a "store_settings" table (id, is_live, dl_number) in Supabase — see admin.js for the create-table snippet.');
+    showBackendWarning('Site-live toggle needs a "store_settings" table (id, is_live, dl_number, contact_phone, whatsapp_share_enabled) in Supabase — see admin.js for the create-table snippet.');
     return;
   }
   applyLiveState(!!data.is_live);
   currentDlNumber = data.dl_number || "";
   applyDlNumber(currentDlNumber);
+  applyContactPhone(data.contact_phone || "");
+  applyWhatsappShareToggle(!!data.whatsapp_share_enabled);
 }
 
 function applyDlNumber(value) {
@@ -975,6 +977,56 @@ if (dlNumberSaveBtn) {
           dlNumberStatus.hidden = true;
         }, 2500);
       }
+    }
+  });
+}
+
+function applyContactPhone(value) {
+  const currentEl = document.getElementById("contact-phone-current");
+  const inputEl = document.getElementById("contact-phone-input");
+  if (currentEl) currentEl.textContent = value || "Not set";
+  if (inputEl && document.activeElement !== inputEl) inputEl.value = value || "";
+}
+
+const contactPhoneSaveBtn = document.getElementById("contact-phone-save-btn");
+const contactPhoneInput = document.getElementById("contact-phone-input");
+const contactPhoneStatus = document.getElementById("contact-phone-status");
+
+if (contactPhoneSaveBtn) {
+  contactPhoneSaveBtn.addEventListener("click", async () => {
+    const value = contactPhoneInput.value.trim();
+    contactPhoneSaveBtn.disabled = true;
+    const { error } = await supabaseClient.from("store_settings").upsert({ id: 1, contact_phone: value });
+    contactPhoneSaveBtn.disabled = false;
+
+    if (contactPhoneStatus) {
+      contactPhoneStatus.hidden = false;
+      if (error) {
+        contactPhoneStatus.textContent = "Couldn't save phone number: " + error.message;
+      } else {
+        applyContactPhone(value);
+        contactPhoneStatus.textContent = "Saved.";
+        setTimeout(() => {
+          contactPhoneStatus.hidden = true;
+        }, 2500);
+      }
+    }
+  });
+}
+
+function applyWhatsappShareToggle(enabled) {
+  const toggle = document.getElementById("whatsapp-share-toggle");
+  if (toggle) toggle.checked = enabled;
+}
+
+const whatsappShareToggle = document.getElementById("whatsapp-share-toggle");
+if (whatsappShareToggle) {
+  whatsappShareToggle.addEventListener("change", async (e) => {
+    const enabled = e.target.checked;
+    const { error } = await supabaseClient.from("store_settings").upsert({ id: 1, whatsapp_share_enabled: enabled });
+    if (error) {
+      alert("Couldn't update WhatsApp share setting: " + error.message);
+      applyWhatsappShareToggle(!enabled);
     }
   });
 }
