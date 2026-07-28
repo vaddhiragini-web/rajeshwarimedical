@@ -697,7 +697,6 @@ placeOrderBtn.addEventListener("click", async () => {
 
     confirmOrderIdEl.textContent = docRef.id.slice(0, 8).toUpperCase();
     showCartStep("confirmation");
-    shareViaWhatsApp(lastPlacedOrder);
   } catch (err) {
     deliveryError.textContent = "Couldn't place order: " + err.message;
     deliveryError.hidden = false;
