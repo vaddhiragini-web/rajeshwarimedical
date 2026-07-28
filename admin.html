@@ -331,6 +331,27 @@ label{display:block;margin-bottom:8px;font-weight:600;}
         <button type="button" class="btn btn-primary" id="dl-number-save-btn">💾 Save</button>
       </div>
       <p id="dl-number-status" class="field-hint" hidden></p>
+
+      <p class="admin-section-title">📞 Contact Number</p>
+      <p class="settings-note">Shown to customers as a "Call Us" button for pickup or any doubts. Current value: <strong id="contact-phone-current">Not set</strong></p>
+      <div style="display:flex;gap:15px;align-items:end;flex-wrap:wrap;">
+        <div style="max-width:320px;flex:1;">
+          <label for="contact-phone-input">Phone Number</label>
+          <input type="tel" id="contact-phone-input" class="text-field" placeholder="e.g. 9876543210" />
+        </div>
+        <button type="button" class="btn btn-primary" id="contact-phone-save-btn">💾 Save</button>
+      </div>
+      <p id="contact-phone-status" class="field-hint" hidden></p>
+
+      <p class="admin-section-title">📱 Send Bill via WhatsApp</p>
+      <div class="live-bar">
+        <span class="live-label">Show "Send via WhatsApp" option to customers after they place an order</span>
+        <label class="switch">
+          <input type="checkbox" id="whatsapp-share-toggle" />
+          <span class="switch-track"><span class="switch-thumb"></span></span>
+        </label>
+      </div>
+      <p class="settings-note">Orders are never auto-sent to WhatsApp. When this is on, customers see a button on their order confirmation screen to send the bill themselves.</p>
     </section>
 
   </div>
