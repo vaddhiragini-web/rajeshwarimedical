@@ -107,6 +107,9 @@ const confirmOrderIdEl = document.getElementById("confirm-order-id");
 const printReceiptBtn = document.getElementById("print-receipt-btn");
 const whatsappShareBtn = document.getElementById("whatsapp-share-btn");
 const confirmContinueBtn = document.getElementById("confirm-continue-btn");
+const callUsLink = document.getElementById("call-us-link");
+const confirmCallBtn = document.getElementById("confirm-call-btn");
+const confirmCallNote = document.getElementById("confirm-call-note");
 
 let lastPlacedOrder = null;
 
@@ -118,17 +121,41 @@ const ordersBody = document.getElementById("orders-body");
 
 let allProducts = [];
 let currentDlNumber = "";
+let currentContactPhone = "";
+let whatsappShareEnabled = false;
 
-async function loadDlNumber() {
+async function loadStoreSettings() {
   if (!supabaseClient) return;
   const { data, error } = await supabaseClient
     .from("store_settings")
-    .select("dl_number")
+    .select("dl_number, contact_phone, whatsapp_share_enabled")
     .eq("id", 1)
     .single();
   if (!error && data) {
     currentDlNumber = data.dl_number || "";
+    currentContactPhone = data.contact_phone || "";
+    whatsappShareEnabled = !!data.whatsapp_share_enabled;
+    applyContactPhoneToUI();
+    applyWhatsappShareToUI();
   }
+}
+
+function applyContactPhoneToUI() {
+  const digits = String(currentContactPhone || "").replace(/\D/g, "");
+  [callUsLink, confirmCallBtn].forEach((el) => {
+    if (!el) return;
+    if (digits) {
+      el.href = `tel:+91${digits.length > 10 ? digits.slice(-10) : digits}`;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+    }
+  });
+  if (confirmCallNote) confirmCallNote.hidden = !digits;
+}
+
+function applyWhatsappShareToUI() {
+  if (whatsappShareBtn) whatsappShareBtn.hidden = !whatsappShareEnabled;
 }
 
 let db = null;
@@ -194,7 +221,7 @@ function enterShop(session) {
   userChip.textContent = session.name || session.phone;
   renderCartFromStorage();
   loadProducts();
-  loadDlNumber();
+  loadStoreSettings();
 }
 
 logoutBtn.addEventListener("click", () => {
@@ -263,7 +290,7 @@ async function initBackend() {
 
   if (supabaseClient && !shopScreen.hidden) {
     loadProducts();
-    loadDlNumber();
+    loadStoreSettings();
   }
 }
 
