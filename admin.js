@@ -685,7 +685,7 @@ if (productForm) {
       category: pCategory.value.trim(),
       price: Number(pPrice.value),
       stock: Number(pStock.value),
-      batch_number: pBatch.value.trim(),
+      batch_number: pBatch.value.trim() || null,
       expiry_date: pExpiry.value || null,
       barcode: pBarcode.value.trim() || null,
       image_url: pImage.value.trim() || null,
@@ -693,18 +693,6 @@ if (productForm) {
 
     if (!payload.name || isNaN(payload.price) || isNaN(payload.stock)) {
       productFormError.textContent = "Please fill in name, price, and stock correctly.";
-      productFormError.hidden = false;
-      return;
-    }
-
-    if (!payload.batch_number) {
-      productFormError.textContent = "Please enter a batch number.";
-      productFormError.hidden = false;
-      return;
-    }
-
-    if (!payload.expiry_date) {
-      productFormError.textContent = "Please enter an expiry date.";
       productFormError.hidden = false;
       return;
     }
@@ -771,181 +759,146 @@ if (pQtyReceivedApplyBtn) {
   });
 }
 
-// ---- Barcode CSV catalog (re-uploaded each session, not stored on the server) ----
-let barcodeCatalog = new Map();
-
+// ---- Bulk stock upload via CSV ----
 function normalizeBarcode(code) {
   return String(code || "").trim();
 }
 
-const barcodeCsvInput = document.getElementById("barcode-csv-input");
-const barcodeCsvStatus = document.getElementById("barcode-csv-status");
+function normalizeName(name) {
+  return String(name || "").trim().toLowerCase();
+}
 
-if (barcodeCsvInput) {
-  barcodeCsvInput.addEventListener("change", () => {
-    const file = barcodeCsvInput.files && barcodeCsvInput.files[0];
-    if (!file) return;
+const stockCsvInput = document.getElementById("stock-csv-input");
+const stockCsvStatus = document.getElementById("stock-csv-status");
+const uploadStockCsvBtn = document.getElementById("upload-stock-csv-btn");
 
-    if (!window.Papa) {
-      barcodeCsvStatus.hidden = false;
-      barcodeCsvStatus.textContent = "CSV parser didn't load — check your internet connection and try again.";
+function setStockCsvStatus(msg) {
+  if (!stockCsvStatus) return;
+  stockCsvStatus.hidden = false;
+  stockCsvStatus.textContent = msg;
+}
+
+if (uploadStockCsvBtn) {
+  uploadStockCsvBtn.addEventListener("click", () => {
+    const file = stockCsvInput && stockCsvInput.files && stockCsvInput.files[0];
+    if (!file) {
+      setStockCsvStatus("Choose a CSV file first.");
       return;
     }
+
+    if (!window.Papa) {
+      setStockCsvStatus("CSV parser didn't load — check your internet connection and try again.");
+      return;
+    }
+
+    uploadStockCsvBtn.disabled = true;
+    setStockCsvStatus("Reading CSV…");
 
     window.Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results) => {
-        barcodeCatalog = new Map();
-        (results.data || []).forEach((row) => {
-          const normalizedRow = {};
-          Object.keys(row).forEach((key) => {
-            normalizedRow[key.trim().toLowerCase()] = (row[key] ?? "").toString().trim();
-          });
-          const barcode = normalizeBarcode(normalizedRow.barcode);
-          if (!barcode) return;
-          barcodeCatalog.set(barcode, {
-            name: normalizedRow.name || "",
-            category: normalizedRow.category || "",
-            price: normalizedRow.price || "",
-            batch_number: normalizedRow.batch_number || normalizedRow.batch || "",
-            expiry_date: normalizedRow.expiry_date || normalizedRow.expiry || "",
-            image_url: normalizedRow.image_url || normalizedRow.image || "",
-          });
-        });
-        barcodeCsvStatus.hidden = false;
-        barcodeCsvStatus.textContent = `Loaded ${barcodeCatalog.size} barcode(s) from CSV for this session.`;
+      complete: async (results) => {
+        try {
+          await processStockCSV(results.data || []);
+        } catch (err) {
+          setStockCsvStatus("Couldn't process CSV: " + err.message);
+        } finally {
+          uploadStockCsvBtn.disabled = false;
+        }
       },
       error: (err) => {
-        barcodeCsvStatus.hidden = false;
-        barcodeCsvStatus.textContent = "Couldn't read CSV: " + err.message;
+        uploadStockCsvBtn.disabled = false;
+        setStockCsvStatus("Couldn't read CSV: " + err.message);
       },
     });
   });
 }
 
-// ---- Camera barcode scanning ----
-const scanBarcodeBtn = document.getElementById("scan-barcode-btn");
-const barcodeScannerWrap = document.getElementById("barcode-scanner-wrap");
-const barcodeScannerCancelBtn = document.getElementById("barcode-scanner-cancel-btn");
-const barcodeScanStatus = document.getElementById("barcode-scan-status");
-let html5QrScanner = null;
-
-if (scanBarcodeBtn) {
-  scanBarcodeBtn.addEventListener("click", startBarcodeScan);
-}
-if (barcodeScannerCancelBtn) {
-  barcodeScannerCancelBtn.addEventListener("click", stopBarcodeScan);
-}
-
-async function startBarcodeScan() {
-  if (!window.Html5Qrcode) {
-    showBarcodeScanStatus("Barcode scanner library didn't load — check your internet connection and try again.");
+async function processStockCSV(rows) {
+  if (!rows.length) {
+    setStockCsvStatus("That CSV has no rows.");
     return;
   }
 
-  barcodeScanStatus.hidden = true;
-  barcodeScannerWrap.hidden = false;
+  // Refresh the in-memory product list so matching is up to date.
+  await loadProducts();
 
-  html5QrScanner = new Html5Qrcode("barcode-scanner-region", {
-    formatsToSupport: window.Html5QrcodeSupportedFormats
-      ? [
-          Html5QrcodeSupportedFormats.QR_CODE,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.CODABAR,
-          Html5QrcodeSupportedFormats.ITF,
-          Html5QrcodeSupportedFormats.DATA_MATRIX,
-        ]
-      : undefined,
-  });
-  try {
-    await html5QrScanner.start(
-      { facingMode: "environment" },
-      { fps: 10, qrbox: { width: 260, height: 260 } },
-      (decodedText) => handleBarcodeScanned(decodedText),
-      () => {} // ignore per-frame "no code found" noise
-    );
-  } catch (err) {
-    barcodeScannerWrap.hidden = true;
-    showBarcodeScanStatus(
-      "Couldn't access the camera: " + err.message + " — make sure you're on HTTPS and allow camera permission when prompted."
-    );
-  }
-}
+  let added = 0;
+  let restocked = 0;
+  let skipped = 0;
+  const errors = [];
 
-async function stopBarcodeScan() {
-  if (html5QrScanner) {
-    try {
-      await html5QrScanner.stop();
-      html5QrScanner.clear();
-    } catch (err) {
-      console.error("Scanner stop failed:", err);
+  for (let i = 0; i < rows.length; i++) {
+    const rawRow = rows[i];
+    const row = {};
+    Object.keys(rawRow).forEach((key) => {
+      row[key.trim().toLowerCase()] = (rawRow[key] ?? "").toString().trim();
+    });
+
+    const name = row.name || "";
+    const stockQty = Number(row.stock);
+    const price = row.price !== undefined && row.price !== "" ? Number(row.price) : null;
+    const barcode = normalizeBarcode(row.barcode);
+
+    if (!name || isNaN(stockQty)) {
+      skipped++;
+      errors.push(`Row ${i + 2}: missing name or stock.`);
+      continue;
     }
-    html5QrScanner = null;
-  }
-  barcodeScannerWrap.hidden = true;
-}
 
-function showBarcodeScanStatus(msg) {
-  if (!barcodeScanStatus) return;
-  barcodeScanStatus.hidden = false;
-  barcodeScanStatus.textContent = msg;
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
+    const existing = barcode
+      ? allProducts.find((p) => p.barcode && normalizeBarcode(p.barcode) === barcode)
+      : allProducts.find((p) => normalizeName(p.name) === normalizeName(name));
 
-function handleBarcodeScanned(code) {
-  stopBarcodeScan();
-  const barcode = normalizeBarcode(code);
+    if (existing) {
+      const updatePayload = {
+        stock: Number(existing.stock || 0) + stockQty,
+      };
+      if (row.category) updatePayload.category = row.category;
+      if (price !== null && !isNaN(price)) updatePayload.price = price;
+      if (row.batch_number || row.batch) updatePayload.batch_number = row.batch_number || row.batch;
+      if (row.expiry_date || row.expiry) updatePayload.expiry_date = row.expiry_date || row.expiry;
+      if (row.image_url || row.image) updatePayload.image_url = row.image_url || row.image;
+      if (barcode) updatePayload.barcode = barcode;
 
-  // 1) Already-saved product with this barcode — treat as a restock.
-  const existing = allProducts.find((p) => p.barcode && normalizeBarcode(p.barcode) === barcode);
-  if (existing) {
-    pIdField.value = existing.id;
-    pName.value = existing.name || "";
-    pCategory.value = existing.category || "";
-    pPrice.value = existing.price ?? "";
-    pStock.value = existing.stock ?? "";
-    pBatch.value = existing.batch_number || "";
-    pExpiry.value = existing.expiry_date || "";
-    pBarcode.value = barcode;
-    pImage.value = existing.image_url || "";
-    productSubmitBtn.textContent = "Save Changes";
-    productCancelBtn.hidden = false;
-    showBarcodeScanStatus(
-      `✅ Matched existing product "${existing.name}" — current stock is ${existing.stock}. Enter "Qty Received" and click "+ Add" to update Stock, then Save.`
-    );
-    if (pQtyReceived) pQtyReceived.focus();
-    return;
-  }
-
-  // 2) Not saved yet — try the uploaded CSV.
-  const csvEntry = barcodeCatalog.get(barcode);
-  resetProductForm();
-
-  if (csvEntry) {
-    pBarcode.value = barcode;
-    pName.value = csvEntry.name || "";
-    pCategory.value = csvEntry.category || "";
-    pPrice.value = csvEntry.price || "";
-    pBatch.value = csvEntry.batch_number || "";
-    pExpiry.value = csvEntry.expiry_date || "";
-    pImage.value = csvEntry.image_url || "";
-    showBarcodeScanStatus(`✅ Found "${csvEntry.name || barcode}" in your CSV — details filled in. Just enter the Stock quantity and Save.`);
-    pStock.focus();
-    return;
+      const { error } = await supabaseClient.from("products").update(updatePayload).eq("id", existing.id);
+      if (error) {
+        skipped++;
+        errors.push(`Row ${i + 2} (${name}): ${error.message}`);
+        continue;
+      }
+      existing.stock = updatePayload.stock;
+      restocked++;
+    } else {
+      const insertPayload = {
+        name,
+        category: row.category || "",
+        price: price !== null && !isNaN(price) ? price : 0,
+        stock: stockQty,
+        batch_number: row.batch_number || row.batch || null,
+        expiry_date: row.expiry_date || row.expiry || null,
+        barcode: barcode || null,
+        image_url: row.image_url || row.image || null,
+      };
+      const { data, error } = await supabaseClient.from("products").insert(insertPayload).select();
+      if (error) {
+        skipped++;
+        errors.push(`Row ${i + 2} (${name}): ${error.message}`);
+        continue;
+      }
+      if (data && data[0]) allProducts.push(data[0]);
+      added++;
+    }
   }
 
-  // 3) Unknown barcode — let them fill in manually; it'll be remembered from now on.
-  pBarcode.value = barcode;
-  showBarcodeScanStatus(
-    `⚠️ Barcode ${barcode} wasn't found in your CSV or saved products. Fill in the details manually — next time you scan it, it'll autofill.`
-  );
-  pName.focus();
+  await loadProducts();
+
+  let summary = `✅ Done — ${added} added, ${restocked} restocked${skipped ? `, ${skipped} skipped` : ""}.`;
+  if (errors.length) {
+    summary += ` Issues: ${errors.slice(0, 5).join(" ")}${errors.length > 5 ? ` (+${errors.length - 5} more)` : ""}`;
+  }
+  setStockCsvStatus(summary);
+  if (stockCsvInput) stockCsvInput.value = "";
 }
 
 const liveToggles = [
