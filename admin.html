@@ -218,7 +218,7 @@ label{display:block;margin-bottom:8px;font-weight:600;}
 
       <div class="scan-card">
         <p class="admin-section-title" style="margin-top:0;">📄 Upload Stock via CSV</p>
-        <p class="field-hint">Upload a CSV to add new products or restock existing ones in bulk (columns: <code>name, category, price, stock, batch_number, expiry_date, barcode, image_url</code> — <code>batch_number</code> and <code>expiry_date</code> are optional). Rows are matched to existing products by <code>barcode</code> when given, otherwise by <code>name</code>; matched rows add the CSV's stock to the current stock, unmatched rows are added as new products.</p>
+        <p class="field-hint">Upload a CSV to add new products or restock existing ones in bulk (columns: <code>name, category, price, stock, batch_number, expiry_date, image_url</code> — <code>batch_number</code> and <code>expiry_date</code> are optional). Rows are matched to existing products by <code>name</code>; matched rows add the CSV's stock to the current stock, unmatched rows are added as new products.</p>
         <div class="scan-controls">
           <div style="max-width:320px;flex:1;">
             <label for="stock-csv-input">Stock CSV</label>
@@ -255,10 +255,6 @@ label{display:block;margin-bottom:8px;font-weight:600;}
           <div>
             <label for="p-expiry">Expiry Date (optional)</label>
             <input type="date" id="p-expiry" class="text-field" />
-          </div>
-          <div>
-            <label for="p-barcode">Barcode (optional)</label>
-            <input type="text" id="p-barcode" class="text-field" placeholder="e.g. 8901234567890" />
           </div>
           <div class="qty-received-field">
             <label for="p-qty-received">Qty Received (add to Stock)</label>
