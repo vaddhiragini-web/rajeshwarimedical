@@ -82,9 +82,6 @@ label{display:block;margin-bottom:8px;font-weight:600;}
 
 .scan-card{background:linear-gradient(135deg,#f5faf7,#eaf6ef);border:1px solid var(--border);border-radius:18px;padding:24px;margin-bottom:25px;}
 .scan-controls{display:flex;gap:15px;align-items:end;flex-wrap:wrap;margin-bottom:12px;}
-#barcode-scanner-wrap{margin-top:15px;}
-#barcode-scanner-region{max-width:420px;margin:0 auto;border-radius:14px;overflow:hidden;box-shadow:var(--shadow);}
-#barcode-scanner-region video{width:100%;border-radius:14px;}
 .qty-received-field label{display:block;}
 
 .print-order-btn{display:block;width:100%;margin-top:8px;font-size:12px;padding:8px 12px;}
@@ -220,22 +217,16 @@ label{display:block;margin-bottom:8px;font-weight:600;}
     <section class="admin-panel" id="panel-products" hidden>
 
       <div class="scan-card">
-        <p class="admin-section-title" style="margin-top:0;">📷 Scan Barcode to Add / Restock</p>
-        <p class="field-hint">Upload your barcode CSV once per session (columns: <code>barcode, name, category, price, batch_number, expiry_date, image_url</code>), then scan — details fill in automatically and you just type the quantity. Products you've already saved are matched by barcode automatically, even without the CSV.</p>
+        <p class="admin-section-title" style="margin-top:0;">📄 Upload Stock via CSV</p>
+        <p class="field-hint">Upload a CSV to add new products or restock existing ones in bulk (columns: <code>name, category, price, stock, batch_number, expiry_date, barcode, image_url</code> — <code>batch_number</code> and <code>expiry_date</code> are optional). Rows are matched to existing products by <code>barcode</code> when given, otherwise by <code>name</code>; matched rows add the CSV's stock to the current stock, unmatched rows are added as new products.</p>
         <div class="scan-controls">
           <div style="max-width:320px;flex:1;">
-            <label for="barcode-csv-input">Barcode CSV (optional)</label>
-            <input type="file" id="barcode-csv-input" class="file-input" accept=".csv" />
+            <label for="stock-csv-input">Stock CSV</label>
+            <input type="file" id="stock-csv-input" class="file-input" accept=".csv" />
           </div>
-          <button type="button" class="btn btn-primary" id="scan-barcode-btn">📷 Scan Barcode</button>
+          <button type="button" class="btn btn-primary" id="upload-stock-csv-btn">⬆ Upload CSV</button>
         </div>
-        <p id="barcode-csv-status" class="field-hint" hidden></p>
-
-        <div id="barcode-scanner-wrap" hidden>
-          <div id="barcode-scanner-region"></div>
-          <button type="button" class="btn btn-ghost" id="barcode-scanner-cancel-btn" style="margin-top:10px;">Cancel Scan</button>
-        </div>
-        <p id="barcode-scan-status" class="field-hint" hidden></p>
+        <p id="stock-csv-status" class="field-hint" hidden></p>
       </div>
 
       <form id="product-form" class="product-form">
@@ -258,16 +249,16 @@ label{display:block;margin-bottom:8px;font-weight:600;}
             <input type="number" id="p-stock" class="text-field" required min="0" step="1" placeholder="0" />
           </div>
           <div>
-            <label for="p-batch">Batch Number</label>
-            <input type="text" id="p-batch" class="text-field" required placeholder="e.g. B24A1123" />
+            <label for="p-batch">Batch Number (optional)</label>
+            <input type="text" id="p-batch" class="text-field" placeholder="e.g. B24A1123" />
           </div>
           <div>
-            <label for="p-expiry">Expiry Date</label>
-            <input type="date" id="p-expiry" class="text-field" required />
+            <label for="p-expiry">Expiry Date (optional)</label>
+            <input type="date" id="p-expiry" class="text-field" />
           </div>
           <div>
-            <label for="p-barcode">Barcode</label>
-            <input type="text" id="p-barcode" class="text-field" placeholder="Auto-filled by scan, or type manually" />
+            <label for="p-barcode">Barcode (optional)</label>
+            <input type="text" id="p-barcode" class="text-field" placeholder="e.g. 8901234567890" />
           </div>
           <div class="qty-received-field">
             <label for="p-qty-received">Qty Received (add to Stock)</label>
@@ -350,7 +341,6 @@ label{display:block;margin-bottom:8px;font-weight:600;}
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module" src="admin.js"></script>
 </body>
 </html>
