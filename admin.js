@@ -511,7 +511,6 @@ const pPrice = document.getElementById("p-price");
 const pStock = document.getElementById("p-stock");
 const pBatch = document.getElementById("p-batch");
 const pExpiry = document.getElementById("p-expiry");
-const pBarcode = document.getElementById("p-barcode");
 const pQtyReceived = document.getElementById("p-qty-received");
 const pQtyReceivedApplyBtn = document.getElementById("p-qty-received-apply-btn");
 const pImage = document.getElementById("p-image");
@@ -653,7 +652,6 @@ function renderProducts() {
       pStock.value = p.stock ?? "";
       pBatch.value = p.batch_number || "";
       pExpiry.value = p.expiry_date || "";
-      pBarcode.value = p.barcode || "";
       pImage.value = p.image_url || "";
       productSubmitBtn.textContent = "Save Changes";
       productCancelBtn.hidden = false;
@@ -687,7 +685,6 @@ if (productForm) {
       stock: Number(pStock.value),
       batch_number: pBatch.value.trim() || null,
       expiry_date: pExpiry.value || null,
-      barcode: pBarcode.value.trim() || null,
       image_url: pImage.value.trim() || null,
     };
 
@@ -760,10 +757,6 @@ if (pQtyReceivedApplyBtn) {
 }
 
 // ---- Bulk stock upload via CSV ----
-function normalizeBarcode(code) {
-  return String(code || "").trim();
-}
-
 function normalizeName(name) {
   return String(name || "").trim().toLowerCase();
 }
@@ -838,7 +831,6 @@ async function processStockCSV(rows) {
     const name = row.name || "";
     const stockQty = Number(row.stock);
     const price = row.price !== undefined && row.price !== "" ? Number(row.price) : null;
-    const barcode = normalizeBarcode(row.barcode);
 
     if (!name || isNaN(stockQty)) {
       skipped++;
@@ -846,9 +838,7 @@ async function processStockCSV(rows) {
       continue;
     }
 
-    const existing = barcode
-      ? allProducts.find((p) => p.barcode && normalizeBarcode(p.barcode) === barcode)
-      : allProducts.find((p) => normalizeName(p.name) === normalizeName(name));
+    const existing = allProducts.find((p) => normalizeName(p.name) === normalizeName(name));
 
     if (existing) {
       const updatePayload = {
@@ -859,7 +849,6 @@ async function processStockCSV(rows) {
       if (row.batch_number || row.batch) updatePayload.batch_number = row.batch_number || row.batch;
       if (row.expiry_date || row.expiry) updatePayload.expiry_date = row.expiry_date || row.expiry;
       if (row.image_url || row.image) updatePayload.image_url = row.image_url || row.image;
-      if (barcode) updatePayload.barcode = barcode;
 
       const { error } = await supabaseClient.from("products").update(updatePayload).eq("id", existing.id);
       if (error) {
@@ -877,7 +866,6 @@ async function processStockCSV(rows) {
         stock: stockQty,
         batch_number: row.batch_number || row.batch || null,
         expiry_date: row.expiry_date || row.expiry || null,
-        barcode: barcode || null,
         image_url: row.image_url || row.image || null,
       };
       const { data, error } = await supabaseClient.from("products").insert(insertPayload).select();
