@@ -16,6 +16,15 @@
 
 body{margin:0;font-family:'Inter',sans-serif;background:#f5faf7;color:var(--text);}
 
+/* Hide the whole dashboard until admin.js confirms a real logged-in
+   session. Prevents a flash of admin data for anyone who isn't authorized. */
+body > .admin-header,
+body > .admin-wrap,
+body > #connect-printer-btn { display: none; }
+body.admin-authed > .admin-header { display: flex; }
+body.admin-authed > .admin-wrap { display: block; }
+body.admin-authed > #connect-printer-btn { display: block; }
+
 .admin-header{height:72px;background:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 35px;border-bottom:1px solid var(--border);box-shadow:var(--shadow);position:sticky;top:0;z-index:100;}
 .admin-header-right,.live-label{display:flex;align-items:center;gap:18px;}
 .admin-pill{background:var(--primary);color:#fff;padding:8px 18px;border-radius:30px;font-size:14px;font-weight:600;}
