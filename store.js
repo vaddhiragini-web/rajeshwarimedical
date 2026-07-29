@@ -53,6 +53,7 @@ const shopScreen = document.getElementById("shop-screen");
 const loginForm = document.getElementById("login-form");
 const loginError = document.getElementById("login-error");
 const adminLoginLink = document.getElementById("admin-login-link");
+const backToShopLink = document.getElementById("back-to-shop-link");
 
 const adminLoginForm = document.getElementById("admin-login-form");
 const adminLoginError = document.getElementById("admin-login-error");
@@ -185,10 +186,28 @@ backToCustomerLink.addEventListener("click", () => {
   showScreen("login");
 });
 
-const existingSession = getSession();
-if (existingSession) {
-  enterShop(existingSession);
-} else {
+backToShopLink.addEventListener("click", () => {
+  pendingAction = null;
+  loginError.hidden = true;
+  showScreen("shop");
+});
+
+// Show the shop straight away for everyone (logged in or not).
+// Login is only requested later, when a guest tries to add to cart,
+// open the cart, or view previous orders (see requireLogin()).
+enterShop(getSession());
+
+let pendingAction = null;
+
+function requireLogin(action) {
+  const session = getSession();
+  if (session) {
+    action();
+    return;
+  }
+  pendingAction = action;
+  loginError.hidden = true;
+  loginForm.reset();
   showScreen("login");
 }
 
@@ -214,11 +233,17 @@ loginForm.addEventListener("submit", (e) => {
   const session = { name, phone: `+91${phoneDigits}` };
   setSession(session);
   enterShop(session);
+
+  if (pendingAction) {
+    const action = pendingAction;
+    pendingAction = null;
+    action();
+  }
 });
 
 function enterShop(session) {
   showScreen("shop");
-  userChip.textContent = session.name || session.phone;
+  userChip.textContent = session ? (session.name || session.phone) : "Guest";
   renderCartFromStorage();
   loadProducts();
   loadStoreSettings();
@@ -227,7 +252,7 @@ function enterShop(session) {
 logoutBtn.addEventListener("click", () => {
   clearSession();
   loginForm.reset();
-  showScreen("login");
+  enterShop(null);
 });
 
 adminLoginForm.addEventListener("submit", (e) => {
@@ -373,13 +398,13 @@ function renderGrid(products) {
   productGrid.querySelectorAll(".add-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, 1);
+      requireLogin(() => changeQty(id, 1));
     });
   });
   productGrid.querySelectorAll(".inc-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.closest(".product-card").dataset.id;
-      changeQty(id, 1);
+      requireLogin(() => changeQty(id, 1));
     });
   });
   productGrid.querySelectorAll(".dec-btn").forEach((btn) => {
@@ -480,8 +505,10 @@ function renderCartFromStorage() {
 }
 
 openCartBtn.addEventListener("click", () => {
-  showCartStep("cart");
-  toggleDrawer(cartDrawer, cartBackdrop, true);
+  requireLogin(() => {
+    showCartStep("cart");
+    toggleDrawer(cartDrawer, cartBackdrop, true);
+  });
 });
 closeCartBtn.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
 cartBackdrop.addEventListener("click", () => toggleDrawer(cartDrawer, cartBackdrop, false));
@@ -882,8 +909,10 @@ function printReceipt(order) {
 }
 
 navOrdersBtn.addEventListener("click", () => {
-  toggleDrawer(ordersDrawer, ordersBackdrop, true);
-  loadOrders();
+  requireLogin(() => {
+    toggleDrawer(ordersDrawer, ordersBackdrop, true);
+    loadOrders();
+  });
 });
 closeOrdersBtn.addEventListener("click", () => toggleDrawer(ordersDrawer, ordersBackdrop, false));
 ordersBackdrop.addEventListener("click", () => toggleDrawer(ordersDrawer, ordersBackdrop, false));
