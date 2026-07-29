@@ -111,6 +111,7 @@ const confirmContinueBtn = document.getElementById("confirm-continue-btn");
 const callUsLink = document.getElementById("call-us-link");
 const confirmCallBtn = document.getElementById("confirm-call-btn");
 const confirmCallNote = document.getElementById("confirm-call-note");
+const aboutPhoneText = document.getElementById("about-phone-text");
 
 let lastPlacedOrder = null;
 
@@ -122,7 +123,9 @@ const ordersBody = document.getElementById("orders-body");
 
 let allProducts = [];
 let currentDlNumber = "";
-let currentContactPhone = "";
+// Default store contact number. The admin panel's store_settings.contact_phone
+// (loaded in loadStoreSettings) will override this if it's set there.
+let currentContactPhone = "9985277365";
 let whatsappShareEnabled = false;
 
 async function loadStoreSettings() {
@@ -153,11 +156,24 @@ function applyContactPhoneToUI() {
     }
   });
   if (confirmCallNote) confirmCallNote.hidden = !digits;
+
+  if (aboutPhoneText) {
+    if (digits) {
+      const last10 = digits.length > 10 ? digits.slice(-10) : digits;
+      aboutPhoneText.innerHTML = `<a href="tel:+91${last10}" class="btn-text">+91 ${last10} →</a>`;
+    } else {
+      aboutPhoneText.textContent = "Use the Call Us button above to reach us directly";
+    }
+  }
 }
 
 function applyWhatsappShareToUI() {
   if (whatsappShareBtn) whatsappShareBtn.hidden = !whatsappShareEnabled;
 }
+
+// Show the default contact number right away, before the backend settings
+// (if any) load and potentially override it.
+applyContactPhoneToUI();
 
 let db = null;
 let supabaseClient = null;
