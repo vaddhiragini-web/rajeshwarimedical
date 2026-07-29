@@ -32,6 +32,7 @@
       </form>
 
       <div class="login-foot">
+        <button type="button" id="back-to-shop-link" class="btn-text">← Back to Shop</button>
         <button type="button" id="admin-login-link" class="btn-text">Admin Login</button>
       </div>
     </div>
@@ -74,6 +75,7 @@
         <a href="#" id="call-us-link" class="link" hidden>📞 Call Us</a>
         <button type="button" class="link" id="nav-orders">Previous Orders</button>
         <a href="#" class="active">Shop</a>
+        <a href="#about-section" class="link">About</a>
         <button type="button" class="cart-btn" id="open-cart-btn">
           🛒 Cart <span class="cart-count" id="cart-count">0</span>
         </button>
@@ -102,6 +104,53 @@
     <div class="product-grid" id="product-grid">
       <p class="loading-state">Loading products…</p>
     </div>
+
+    <section class="about-section" id="about-section">
+      <div class="about-media">
+        <!-- Replace this src with a real photo of your storefront/shop -->
+        <img
+          src="https://images.unsplash.com/photo-1587854692152-cbe660dbde88?q=80&w=900&auto=format&fit=crop"
+          alt="Rajeshwari Medical & General Stores storefront"
+          id="about-store-image"
+        />
+      </div>
+      <div class="about-content">
+        <p class="about-eyebrow">About Us</p>
+        <h2>Rajeshwari Medical &amp; General Stores</h2>
+        <p class="about-copy">
+          Your trusted neighbourhood pharmacy for genuine medicines, healthcare essentials,
+          and everyday general store items — with home delivery right to your door.
+        </p>
+
+        <div class="about-details">
+          <div class="about-detail">
+            <span class="about-icon">📍</span>
+            <div>
+              <strong>Visit Our Store</strong>
+              <p>Uppal, Medchal-Malkajgiri, Telangana</p>
+              <!-- Add your Google Maps share link as the href below -->
+              <a href="#" id="store-location-link" class="btn-text" target="_blank" rel="noopener">Get Directions →</a>
+            </div>
+          </div>
+
+          <div class="about-detail">
+            <span class="about-icon">🕒</span>
+            <div>
+              <strong>Store Hours</strong>
+              <p>Open all days · 8:00 AM – 10:00 PM</p>
+            </div>
+          </div>
+
+          <div class="about-detail">
+            <span class="about-icon">📞</span>
+            <div>
+              <strong>Call Us</strong>
+              <p id="about-phone-text">Use the Call Us button above to reach us directly</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
   </section>
 
   <div class="drawer-backdrop" id="cart-backdrop" hidden></div>
