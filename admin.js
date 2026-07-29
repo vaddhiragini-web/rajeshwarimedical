@@ -50,7 +50,10 @@ tabButtons.forEach((btn) => {
 
 const logoutBtn = document.getElementById("admin-logout-btn");
 if (logoutBtn) {
-  logoutBtn.addEventListener("click", () => {
+  logoutBtn.addEventListener("click", async () => {
+    if (supabaseClient) {
+      await supabaseClient.auth.signOut();
+    }
     window.location.href = STORE_LOGIN_URL;
   });
 }
@@ -63,6 +66,30 @@ async function initBackend() {
     console.error("Supabase init failed:", err);
     supabaseClient = null;
   }
+
+  // Gate the whole admin console behind a real Supabase Auth session.
+  // Anyone landing on this page directly (without logging in) gets bounced
+  // straight back to the store's login screen.
+  if (supabaseClient) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) {
+      window.location.replace(STORE_LOGIN_URL);
+      return;
+    }
+    // Keep the admin console in sync if the session is later signed out
+    // (e.g. from another tab, or expiry).
+    supabaseClient.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") window.location.replace(STORE_LOGIN_URL);
+    });
+  } else {
+    // Can't verify a session without Supabase — safest to not show the
+    // dashboard rather than fail open.
+    showBackendWarning("Couldn't verify your session — please refresh, or log in again.");
+    window.location.replace(STORE_LOGIN_URL);
+    return;
+  }
+
+  document.body.classList.add("admin-authed");
 
   try {
     const [{ initializeApp }, firestoreMod] = await Promise.all([
