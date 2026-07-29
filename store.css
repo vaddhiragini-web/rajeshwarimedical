@@ -410,7 +410,7 @@ html { scroll-behavior: smooth; }
 
 .about-section {
   display: flex;
-  align-items: stretch;
+  align-items: flex-start;
   gap: 36px;
   margin: 8px 28px 48px;
   padding: 32px;
@@ -422,12 +422,13 @@ html { scroll-behavior: smooth; }
 }
 
 .about-media {
-  flex: 0 0 340px;
+  flex: 0 0 300px;
   border-radius: 16px;
   overflow: hidden;
   background: var(--green-50);
+  aspect-ratio: 717 / 1122;
 }
-.about-media img { width: 100%; height: 100%; object-fit: cover; min-height: 260px; }
+.about-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .about-content { flex: 1; min-width: 0; }
 .about-eyebrow {
