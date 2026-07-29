@@ -271,15 +271,36 @@ logoutBtn.addEventListener("click", () => {
   enterShop(null);
 });
 
-adminLoginForm.addEventListener("submit", (e) => {
+adminLoginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   adminLoginError.hidden = true;
 
-  const username = document.getElementById("a-username").value.trim();
+  const email = document.getElementById("a-username").value.trim();
   const password = document.getElementById("a-password").value;
 
-  if (!username || !password) {
-    adminLoginError.textContent = "Enter both username and password.";
+  if (!email || !password) {
+    adminLoginError.textContent = "Enter both email and password.";
+    adminLoginError.hidden = false;
+    return;
+  }
+
+  if (!supabaseClient) {
+    adminLoginError.textContent = "Can't reach the server right now — please try again in a moment.";
+    adminLoginError.hidden = false;
+    return;
+  }
+
+  const submitBtn = adminLoginForm.querySelector("button[type=submit]");
+  submitBtn.disabled = true;
+  submitBtn.textContent = "Signing in…";
+
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = "Login →";
+
+  if (error) {
+    adminLoginError.textContent = "Incorrect email or password.";
     adminLoginError.hidden = false;
     return;
   }
